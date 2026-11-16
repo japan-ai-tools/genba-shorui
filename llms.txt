@@ -1,0 +1,20 @@
+# genba-shorui(現場の書類)
+
+> One offline HTML page for small Japanese contractors: turns a short site memo into a daily work report (作業日報), an estimate (御見積書) and a Japanese qualified invoice (適格請求書) without retyping. Before an invoice is produced it checks the six required items and that consumption tax is rounded once per tax rate (8% reduced / 10%), not per line item. Nothing is sent anywhere (Content-Security-Policy blocks network access). Not tax advice.
+
+一人親方・小さな工務店のための1枚のWebページ。現場のメモから日報・見積・請求書を作り、請求書は記載事項6つと「税率ごとに1回の端数処理」を検査してから出します。
+
+## Use it
+- [index.html](index.html): open in a browser; no install, no account
+- [README](README.md): memo format. One line per item: `品名 数量単位 @単価` (e.g. `クロス張替え 12.5㎡ @1200`, `解体 1式 3万円`). Lines with `※` or `軽減` use the 8% reduced rate, others 10%
+- Lines whose quantity and unit price cannot be read stay in the daily report only; prices are never invented
+
+## Limits
+- Saves drafts only in this browser; photos are not stored; no multi-device or team use yet
+- Does not suggest market unit prices; does not read text or quantities from photos
+- Does not confirm that a registration number is currently valid (see [invoice-watch](https://github.com/japan-ai-tools/invoice-watch))
+
+## Optional
+- [Tests](tests/): `node tests/test_genba.mjs` and `python -m unittest discover -s tests`
+- Invoice rules shared with [jp-invoice-check](https://github.com/japan-ai-tools/jp-invoice-check)
+- [License](LICENSE): MIT. Sources: [LICENSES.md](LICENSES.md)
