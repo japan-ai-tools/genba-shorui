@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'none'; form-action 'none'">
+<title>現場の書類 — メモから日報・見積・請求書</title>
+<style>
+:root{--fg:#1d2430;--bg:#fff;--line:#c9d1dc;--accent:#1f5fa8;--soft:#f1f5fa;--ng:#fde8e8;--ok:#e6f4ea;--warn:#fff4d6}
+@media (prefers-color-scheme:dark){:root{--fg:#e6e9ee;--bg:#14181f;--line:#3a4352;--accent:#6aa5ec;--soft:#1d232d;--ng:#4a2323;--ok:#1f3a28;--warn:#4a3d1a}}
+body{font-family:system-ui,'Hiragino Sans','Meiryo',sans-serif;margin:0 auto;padding:16px;max-width:960px;color:var(--fg);background:var(--bg);line-height:1.6}
+h1{font-size:1.3rem;margin:.2em 0}h2{font-size:1.1rem;border-bottom:2px solid var(--accent);padding-bottom:2px}
+label{display:block;margin:.4em 0}input,textarea,select{font:inherit;width:100%;box-sizing:border-box;padding:6px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--fg)}
+textarea{min-height:9em}.row{display:flex;gap:8px;flex-wrap:wrap}.row>label{flex:1 1 200px}
+button{font:inherit;padding:8px 16px;border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:4px;cursor:pointer;margin:4px 4px 4px 0}
+button.sub{background:transparent;color:var(--accent)}
+.box{background:var(--soft);padding:10px 12px;border-radius:6px;margin:10px 0}.small{font-size:.85rem}
+table{border-collapse:collapse;width:100%;margin:6px 0}th,td{border:1px solid var(--line);padding:4px 6px;text-align:left}td.n{text-align:right;white-space:nowrap}
+.ng{background:var(--ng)}.ok{background:var(--ok)}.warn{background:var(--warn)}
+.doc{border:1px solid var(--line);padding:12px;border-radius:6px;margin:12px 0}
+.photos img{max-width:160px;max-height:120px;margin:4px;border:1px solid var(--line)}
+@media print{.noprint{display:none!important}body.p-report .doc:not(#d-report),body.p-estimate .doc:not(#d-estimate),body.p-invoice .doc:not(#d-invoice){display:none}.doc{border:none}}
+</style>
+</head>
+<body>
+<h1 class="noprint">現場の書類 <span class="small">v<span id="ver"></span>(無料版)</span></h1>
+<p class="small noprint">現場のメモと写真から、日報 → 見積書 → 請求書(適格請求書)を打ち直さずに作ります。入力も写真もこの端末の中だけで扱い、どこにも送りません(このページは通信しません)。</p>
+
+<div class="noprint">
+<h2>1. 今日の現場</h2>
+<div class="row"><label>現場名 <input id="site" placeholder="例: 山田様邸 2階"></label><label>日付 <input id="date" type="date"></label><label>天気 <input id="weather" placeholder="例: 晴れ"></label></div>
+<label>作業した人(1行に1人・名前と時間) <textarea id="workers" style="min-height:4em" placeholder="田中 8&#10;佐藤 7.5"></textarea></label>
+<label>メモ(1行に1つ。品目は「品名 数量単位 @単価」) <textarea id="memo" placeholder="クロス張替え 12.5㎡ @1200&#10;解体 1式 3万円&#10;養生 2日 × 8000&#10;雨で午後は室内作業"></textarea></label>
+<p class="small">声で入れたいときは、スマホのキーボードのマイクで話すとこの欄に文字が入ります。数量と単価が読めない行は品目にせず、日報の「作業の記録」に残します(値段を勝手に作りません)。</p>
+<label>写真(端末の中で表示するだけ・保存はしません) <input id="photos" type="file" accept="image/*" multiple></label>
+<div id="thumbs" class="photos"></div>
+
+<h2>2. 請求先と自分</h2>
+<div class="row"><label>お客様(請求先) <input id="buyer" placeholder="例: 山田 太郎 様"></label><label>端数処理 <select id="rounding"><option value="floor">切捨て</option><option value="half_up">四捨五入</option><option value="ceil">切上げ</option></select></label></div>
+<div class="row"><label>自分の屋号・名前 <input id="issuer"></label><label>登録番号(T+13桁) <input id="regno" placeholder="T0000000000000"></label></div>
+<p><button id="make">3つの書類を作る</button> <button class="sub" id="sample">見本を入れる</button> <button class="sub" id="clear">入力を消す</button></p>
+<div id="msg"></div>
+</div>
+
+<div id="docs"></div>
+
+<p class="small noprint">確かめていないこと: 登録番号がいま有効か(国税庁の公表サイトで確認してください)・適格簡易請求書などの特例・工事の契約書の決まり。税の判断の最終の確認は税理士か所轄の税務署へ。請求書の検査は jp-invoice-check と同じ決まりです(国税庁「適格請求書等保存方式の概要」https://www.nta.go.jp/publication/pamph/shohi/shohizei_11.pdf)。月額版(複数の端末で使う・単価の目安)は準備中です。</p>
+
+<script>
+/*JPINVOICE*/
+</script>
+<script>
+/*GENBA*/
+</script>
+<script>
+(function () {
+  "use strict";
+  var G = window.Genba, J = window.JPInvoice, KEY = "genba-shorui:draft:v1", photos = [];
+  var $ = function (id) { return document.getElementById(id); };
+  var F = ["site", "date", "weather", "workers", "memo", "buyer", "rounding", "issuer", "regno"];
+  $("ver").textContent = G.VERSION;
+  function yen(n) { return n.toLocaleString("ja-JP") + "円"; }
+  function esc(s) { return J.esc(s); }
+  function honor(n) { n = String(n || "").trim(); return !n ? "(お客様名なし)" : (/(様|御中|殿)$/.test(n) ? n : n + " 様"); }
+  function save() { try { var d = {}; F.forEach(function (k) { d[k] = $(k).value; }); localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) { /* 保存できない端末でも動く */ } }
+  function load() { try { var d = JSON.parse(localStorage.getItem(KEY) || "null"); if (d) F.forEach(function (k) { if (d[k] != null) $(k).value = d[k]; }); } catch (e) { /* なし */ } }
+  if (!$("date").value) $("date").value = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  load();
+  F.forEach(function (k) { $(k).addEventListener("input", save); });
+
+  $("photos").addEventListener("change", function () {
+    photos = []; $("thumbs").innerHTML = "";
+    Array.prototype.slice.call(this.files, 0, 20).forEach(function (f) {
+      var r = new FileReader();
+      r.onload = function () { photos.push({name: f.name, url: r.result}); var im = document.createElement("img"); im.src = r.result; im.alt = f.name; $("thumbs").appendChild(im); };
+      r.readAsDataURL(f);
+    });
+  });
+
+  function workers() {
+    return $("workers").value.split(/\r?\n/).map(function (l) { return l.normalize("NFKC").trim(); }).filter(Boolean).map(function (l) {
+      var m = /^(.+?)\s+(\d+(?:\.\d{1,2})?)\s*(?:時間|h)?$/.exec(l);
+      if (!m) throw new Error("作業した人の行「" + l + "」は「名前 時間」の形で書いてください(例: 田中 8)。");
+      return {name: m[1], hours: m[2]};
+    });
+  }
+  function itemRows(items, money) {
+    return items.map(function (it) {
+      return "<tr><td>" + esc(it.description) + (it.reduced ? " ※" : "") + "</td><td class='n'>" + esc(G.qtyText(it.qty100)) + esc(it.unit) + "</td>" +
+        (money ? "<td class='n'>" + yen(it.unit_price) + "</td><td class='n'>" + yen(it.amount) + "</td><td class='n'>" + it.rate + "%</td>" : "") + "</tr>";
+    }).join("");
+  }
+  function totalsRows(totals) {
+    return totals.map(function (t) { return "<tr><td>" + t.rate + "%対象</td><td class='n'>" + yen(t.amount) + "</td><td>消費税 " + t.rate + "%</td><td class='n'>" + yen(t.tax) + "</td></tr>"; }).join("");
+  }
+  function render(out) {
+    var r = out.report, e = out.estimate, iv = out.invoice, inv = iv.invoice, c = iv.check, h = [];
+    h.push("<div class='doc' id='d-report'><h2>作業日報</h2><p>" + esc(r.date) + " / 現場: " + esc(r.site) + (r.weather ? " / 天気: " + esc(r.weather) : "") + "</p>");
+    if (r.workers.length) h.push("<table><tr><th>作業した人</th><th>時間</th></tr>" + r.workers.map(function (w) { return "<tr><td>" + esc(w.name) + "</td><td class='n'>" + esc(G.qtyText(w.hours100)) + "時間</td></tr>"; }).join("") + "</table>");
+    h.push("<p><b>作業の記録</b></p><ul>" + (r.notes.length ? r.notes.map(function (n) { return "<li>" + esc(n) + "</li>"; }).join("") : "<li>(なし)</li>") + "</ul>");
+    if (r.items.length) h.push("<p><b>今日の作業の量</b></p><table><tr><th>品目</th><th>数量</th></tr>" + itemRows(r.items, false) + "</table>");
+    if (photos.length) h.push("<div class='photos'>" + photos.map(function (p) { return "<img src='" + p.url + "' alt='" + esc(p.name) + "'>"; }).join("") + "</div>");
+    h.push("<p class='noprint'><button class='sub' data-print='report'>日報を印刷・PDF</button></p></div>");
+
+    h.push("<div class='doc' id='d-estimate'><h2>御見積書</h2><p>" + esc(honor(e.buyer)) + " / " + esc(e.date) + " / 現場: " + esc(e.site) + " / 有効期限: 発行から" + e.valid_days + "日</p>");
+    h.push("<table><tr><th>品目</th><th>数量</th><th>単価</th><th>金額</th><th>税率</th></tr>" + itemRows(e.items, true) + "</table><table>" + totalsRows(e.totals) + "</table>");
+    h.push("<p><b>御見積金額(税込) " + yen(iv.grand_total) + "</b></p><p class='small'>※は軽減税率(8%)の対象。消費税は税率ごとの合計に1回だけ端数処理しています。</p>");
+    h.push("<p class='noprint'><button class='sub' data-print='estimate'>見積を印刷・PDF</button></p></div>");
+
+    h.push("<div class='doc' id='d-invoice'><h2>請求書</h2><p>" + esc(honor(inv.buyer.name)) + " / 取引日 " + esc(inv.date) + "</p><p>" + esc(inv.issuer.name || "(屋号・名前なし)") + " 登録番号 " + esc(inv.issuer.registration_number || "(なし)") + "</p>");
+    h.push("<table><tr><th>内容</th><th>金額(税抜)</th><th>税率</th></tr>" + inv.items.map(function (it) { return "<tr><td>" + esc(it.description) + (it.reduced ? " ※" : "") + "</td><td class='n'>" + yen(it.amount) + "</td><td class='n'>" + it.rate + "%</td></tr>"; }).join("") + "</table><table>" + totalsRows(inv.totals) + "</table>");
+    h.push("<p><b>ご請求金額(税込) " + yen(iv.grand_total) + "</b></p><p class='small'>※は軽減税率対象</p>");
+    var cls = c.ok ? (c.warnings.length ? "warn" : "ok") : "ng";
+    h.push("<div class='box noprint " + cls + "'><b>適格請求書の検査: " + (c.ok ? "記載事項はそろっています" : "直すところがあります") + "</b><ul>" +
+      c.errors.concat(c.warnings).map(function (m) { return "<li><code>" + esc(m.code) + "</code> " + esc(m.message_ja) + "</li>"; }).join("") + "</ul></div>");
+    h.push("<p class='noprint'><button class='sub' data-print='invoice'>請求書を印刷・PDF</button></p></div>");
+    $("docs").innerHTML = h.join("\n");
+  }
+  $("make").addEventListener("click", function () {
+    $("msg").innerHTML = "";
+    try {
+      var out = G.fromMemo({site: $("site").value, date: $("date").value, weather: $("weather").value, memo: $("memo").value, workers: workers(), photos: photos.map(function (p) { return p.name; })},
+        {name: $("issuer").value, registration_number: $("regno").value}, {buyer: $("buyer").value, rounding: $("rounding").value});
+      render(out);
+    } catch (e) {
+      $("docs").innerHTML = "";
+      $("msg").innerHTML = "<div class='box ng'>" + esc(e.message) + "</div>";
+    }
+  });
+  $("docs").addEventListener("click", function (ev) {
+    var k = ev.target.getAttribute && ev.target.getAttribute("data-print");
+    if (!k) return;
+    document.body.className = "p-" + k; window.print(); document.body.className = "";
+  });
+  $("sample").addEventListener("click", function () {
+    $("site").value = "見本 山田様邸 2階"; $("weather").value = "雨のち晴れ"; $("workers").value = "田中 8\n佐藤 7.5";
+    $("memo").value = "クロス張替え 12.5㎡ @1200\n既存クロス撤去 12.5㎡ @300\n養生 1式 8000円\n雨で午前は資材の搬入だけ\n差し入れのお茶 2本 @150 ※";
+    $("buyer").value = "見本 山田 太郎 様"; $("issuer").value = "見本 田中内装"; $("regno").value = "T9000000000000"; save();
+  });
+  $("clear").addEventListener("click", function () { F.forEach(function (k) { if (k !== "rounding" && k !== "date") $(k).value = ""; }); $("docs").innerHTML = ""; save(); });
+})();
+</script>
+</body>
+</html>
