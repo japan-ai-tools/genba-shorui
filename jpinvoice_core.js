@@ -1,0 +1,578 @@
+/* jp-invoice-check の検査の中心(offline/jp_invoice_check.html の CORE と同じ中身・MIT・nexus-tools)。build.py が index.html に埋め込む。直すときは元の jp-invoice-check を直してから写す */
+(function (root) {
+  "use strict";
+  var VERSION = "0.3.0-offline";
+  var RATES = [10, 8];
+  var ROUNDINGS = ["floor", "half_up", "ceil"];
+  var RJA = {floor: "切捨て", half_up: "四捨五入", ceil: "切上げ"};
+  var BJA = {exclusive: "税抜", inclusive: "税込"};
+  var ERA = {"令和": 2018, "平成": 1988};
+
+  function nfkc(s) { return String(s == null ? "" : s).normalize("NFKC"); }
+  function msg(level, code, field, ja, correct) {
+    var m = {level: level, code: code, field: field, message_ja: ja};
+    if (correct != null) m.correct_ja = correct;  // the right amount, when the checker knows it (for the CSV export)
+    return m;
+  }
+
+  // exact integer arithmetic (BigInt): floor(n / d) with d > 0
+  function fdiv(n, d) { var q = n / d; if (n % d !== 0n && n < 0n) q -= 1n; return q; }
+  function expectedTax(amount, rate, basis, rounding) {
+    var a = BigInt(amount), r = BigInt(rate);
+    var n = a * r, d = basis === "exclusive" ? 100n : 100n + r;
+    var v;
+    if (rounding === "floor") v = fdiv(n, d);
+    else if (rounding === "ceil") v = -fdiv(-n, d);
+    else if (rounding === "half_up") v = n >= 0n ? fdiv(2n * n + d, 2n * d) : -fdiv(-2n * n + d, 2n * d);
+    else throw new Error("unknown rounding: " + rounding);
+    return Number(v);
+  }
+
+  function corporateCheckDigit(base12) {
+    var ds = base12.split("").map(Number).reverse(), s = 0;
+    for (var i = 0; i < ds.length; i++) s += ds[i] * (i % 2 === 0 ? 1 : 2);
+    return 9 - s % 9;
+  }
+
+  function checkRegistrationNumber(value) {
+    var out = {normalized: null, valid_format: false, corporate_check_digit_ok: null, messages: []};
+    if (value == null || String(value).trim() === "") {
+      out.messages.push(msg("error", "E_REGNO_MISSING", "issuer.registration_number", "登録番号がありません(記載事項1)。"));
+      return out;
+    }
+    var n = nfkc(value).replace(/[\s\-‐−ー―]/g, "");
+    if (n.charAt(0) === "t") n = "T" + n.slice(1);
+    if (!/^T\d{13}$/.test(n)) {
+      out.messages.push(msg("error", "E_REGNO_FORMAT", "issuer.registration_number", "登録番号は「T+13桁の数字」です。入力: '" + value + "'"));
+      return out;
+    }
+    out.normalized = n; out.valid_format = true;
+    if (n !== String(value)) out.messages.push(msg("warning", "W_REGNO_NORMALIZED", "issuer.registration_number", "登録番号を " + n + " に整えました(全角・空白・ハイフン)。"));
+    var ok = Number(n.charAt(1)) === corporateCheckDigit(n.slice(2));
+    out.corporate_check_digit_ok = ok;
+    if (!ok) out.messages.push(msg("warning", "W_REGNO_CHECK_DIGIT", "issuer.registration_number", "先頭の1桁が法人番号の検査用数字と合いません。発行者が法人なら番号の誤りです。登録が今も有効かは確かめていません(通信しないため)。"));
+    return out;
+  }
+
+  function realDate(y, m, d) {
+    if (y < 1 || y > 9999 || m < 1 || m > 12 || d < 1) return null;
+    var dim = [31, (y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0)) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][m - 1];
+    if (d > dim) return null;
+    return y * 10000 + m * 100 + d;
+  }
+  function parseDate(s) {
+    var t = nfkc(s).trim(), m = /^(\d{4})[-\/年.](\d{1,2})[-\/月.](\d{1,2})日?$/.exec(t);
+    if (m) return realDate(+m[1], +m[2], +m[3]);
+    m = /^(令和|平成)(\d{1,2}|元)年(\d{1,2})月(\d{1,2})日$/.exec(t);
+    if (!m) return null;
+    return realDate(ERA[m[1]] + (m[2] === "元" ? 1 : +m[2]), +m[3], +m[4]);
+  }
+
+  function checkInvoice(inv, policy, role) {
+    role = role || "issue";
+    var msgs = [], req = {};
+    var issuer = inv.issuer || {};
+    var rn = checkRegistrationNumber(issuer.registration_number);
+    msgs = msgs.concat(rn.messages);
+    var hasName = String(issuer.name || "").trim() !== "";
+    if (!hasName) msgs.push(msg("error", "E_ISSUER_NAME_MISSING", "issuer.name", "発行者の氏名・名称がありません(記載事項1)。"));
+    req["1_issuer_and_registration_number"] = hasName && rn.valid_format;
+    // 2 date
+    var d = inv.date, dateOk = true;
+    if (d == null || d === "") {
+      msgs.push(msg("error", "E_DATE_MISSING", "date", "取引年月日がありません(記載事項2)。"));
+      dateOk = false;
+    } else if (parseDate(d) == null) {
+      msgs.push(msg("error", "E_DATE_INVALID", "date", "日付が暦にない、または読めません: '" + d + "'"));
+      dateOk = false;
+    }
+    req["2_transaction_date"] = dateOk;
+
+    var basis = inv.price_basis || "exclusive";
+    if (policy && inv.rounding && inv.rounding !== policy.rounding) {
+      msgs.push(msg("warning", "W_INVOICE_ROUNDING_IGNORED", "rounding", "請求書側の端数処理の指定(" + inv.rounding + ")は使わず、社内規則(" + policy.rounding + ")で検査しました。"));
+    }
+    var rounding = policy ? null : (inv.rounding || null);
+    var allowed = rounding ? [rounding] : ROUNDINGS.slice();
+
+    var items = inv.items || [], itemOk = items.length > 0, sums = {}, lineTax = {};
+    if (!items.length) msgs.push(msg("error", "E_ITEMS_MISSING", "items", "取引の内容がありません(記載事項3)。"));
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i], f = "items[" + i + "]";
+      if (String(it.description || "").trim() === "") { msgs.push(msg("error", "E_ITEM_DESCRIPTION_MISSING", f + ".description", "取引の内容(品名など)が空です。")); itemOk = false; }
+      if (!Number.isInteger(it.amount) || !Number.isInteger(it.rate)) throw new Error((i + 1) + "番目の品目: 金額か税率が空です(どちらも整数で入れてください)。");
+      var rate = it.rate;
+      if (RATES.indexOf(rate) < 0) { msgs.push(msg("error", "E_RATE_INVALID", f + ".rate", "税率は10か8です。入力: " + rate)); itemOk = false; continue; }
+      var reduced = !!it.reduced;
+      if (rate === 8 && !reduced) { msgs.push(msg("error", "E_REDUCED_NOT_MARKED", f + ".reduced", "8%の品目に軽減税率の対象である印(※など)がありません(記載事項3)。")); itemOk = false; }
+      if (rate === 10 && reduced) { msgs.push(msg("error", "E_REDUCED_RATE_MISMATCH", f + ".reduced", "軽減税率の印があるのに税率が10%です。")); itemOk = false; }
+      sums[rate] = (sums[rate] || 0) + it.amount;
+      if (!lineTax[rate]) lineTax[rate] = {floor: 0, half_up: 0, ceil: 0};
+      ROUNDINGS.forEach(function (r) { lineTax[rate][r] += expectedTax(it.amount, rate, basis, r); });
+    }
+    req["3_description_and_reduced_mark"] = itemOk;
+
+    var totals = {};
+    (inv.totals || []).forEach(function (t) { totals[t.rate] = t; });
+    var rates = Object.keys(sums).map(Number).sort(function (a, b) { return b - a; });
+    var tOk = rates.length > 0, xOk = rates.length > 0, byRate = [];
+    rates.forEach(function (rate) {
+      var exp = {};
+      ROUNDINGS.forEach(function (r) { exp[r] = expectedTax(sums[rate], rate, basis, r); });
+      var row = {rate: rate, items_total: sums[rate], expected_tax: exp, line_rounding_tax: lineTax[rate], stated_amount: null, stated_tax: null, matched_rounding: null};
+      byRate.push(row);
+      var t = totals[rate];
+      if (!t) { msgs.push(msg("error", "E_TOTAL_BY_RATE_MISSING", "totals", rate + "%の合計と税額の行がありません(記載事項4・5)。")); tOk = xOk = false; return; }
+      if (t.amount == null) { msgs.push(msg("error", "E_TOTAL_BY_RATE_MISSING", "totals[" + rate + "].amount", rate + "%の合計額がありません(記載事項4)。")); tOk = false; }
+      else {
+        row.stated_amount = t.amount;
+        if (t.amount !== sums[rate]) { msgs.push(msg("error", "E_TOTAL_MISMATCH", "totals[" + rate + "].amount", rate + "%の合計額 " + t.amount + " が品目の合計 " + sums[rate] + " と合いません。", sums[rate] + "円")); tOk = false; }
+      }
+      if (t.tax == null) { msgs.push(msg("error", "E_TAX_MISSING", "totals[" + rate + "].tax", rate + "%の消費税額がありません(記載事項5)。")); xOk = false; return; }
+      var st = row.stated_tax = t.tax;
+      var hit = allowed.filter(function (r) { return exp[r] === st; });
+      if (hit.length) { row.matched_rounding = hit[0]; return; }
+      xOk = false;
+      var want = allowed.map(function (r) { return exp[r] + "円(" + RJA[r] + ")"; }).join("・");
+      if (allowed.some(function (r) { return lineTax[rate][r] === st; })) {
+        msgs.push(msg("error", "E_TAX_LINE_ROUNDING", "totals[" + rate + "].tax", rate + "%の税額 " + st + " は品目ごとに端数処理した合計です。端数処理は1つの請求書につき税率ごとに1回: 正しくは " + want + "。", want));
+      } else {
+        msgs.push(msg("error", "E_TAX_MISMATCH", "totals[" + rate + "].tax", rate + "%の税額 " + st + " が合いません。正しくは " + want + "。", want));
+      }
+    });
+    Object.keys(totals).forEach(function (k) {
+      if (!(k in sums)) msgs.push(msg("warning", "W_TOTAL_WITHOUT_ITEMS", "totals", k + "%の合計行がありますが、その税率の品目がありません。"));
+    });
+    req["4_total_per_rate_with_rate"] = tOk;
+    req["5_tax_per_rate"] = xOk;
+    req["6_buyer_name"] = String((inv.buyer || {}).name || "").trim() !== "";
+    if (!req["6_buyer_name"]) msgs.push(msg("error", "E_BUYER_MISSING", "buyer.name", "交付を受ける事業者(買い手)の氏名・名称がありません(記載事項6)。"));
+
+    var policyCheck = null;
+    if (policy) {
+      var level = role === "issue" ? "error" : "warning", pr = policy.rounding, pb = policy.price_basis || "exclusive";
+      if (basis !== pb) msgs.push(msg(level, level === "error" ? "E_POLICY_PRICE_BASIS" : "W_POLICY_PRICE_BASIS", "price_basis", "金額は" + BJA[basis] + "で書かれていますが、社内規則は" + BJA[pb] + "です。"));
+      var rows = byRate.map(function (row) {
+        var used = row.matched_rounding, ours = row.expected_tax[pr];
+        var diff = row.stated_tax == null ? null : row.stated_tax - ours;
+        if (used != null && row.stated_tax !== ours) {
+          msgs.push(msg(level, level === "error" ? "E_POLICY_ROUNDING" : "W_POLICY_ROUNDING", "totals[" + row.rate + "].tax",
+            row.rate + "%の税額 " + row.stated_tax + " は" + RJA[used] + "で計算されています。社内規則は" + RJA[pr] + "(" + ours + "円)なので、" + (diff > 0 ? "+" : "") + diff + "円ずれます。", ours + "円(" + RJA[pr] + ")"));
+        }
+        return {rate: row.rate, invoice_rounding: used, policy_rounding: pr, stated_tax: row.stated_tax, tax_by_policy: ours, difference: diff, same: used != null && row.stated_tax === ours};
+      });
+      policyCheck = {policy: policy, role: role, by_rate: rows, same: basis === pb && rows.every(function (r) { return r.same; })};
+    }
+    var errors = msgs.filter(function (m) { return m.level === "error"; });
+    var warnings = msgs.filter(function (m) { return m.level === "warning"; });
+    return {ok: errors.length === 0, errors: errors, warnings: warnings, required_items: req, policy_check: policyCheck, by_rate: byRate, price_basis: basis};
+  }
+
+  // ---- CSV (one row per line item), same columns as `python -m jpinvoice.batch` ----
+  var ALIASES = {
+    invoice_id: ["請求書番号", "請求書no", "請求書id", "伝票番号", "invoice_id", "invoice"],
+    issuer_name: ["発行者", "発行者名", "取引先", "請求元", "issuer_name", "issuer"],
+    registration_number: ["登録番号", "インボイス番号", "適格請求書発行事業者登録番号", "registration_number"],
+    date: ["取引日", "取引年月日", "日付", "date"],
+    buyer_name: ["買い手", "宛名", "請求先", "buyer_name", "buyer"],
+    price_basis: ["税込税抜", "税抜税込", "price_basis", "basis"],
+    description: ["品名", "内容", "摘要", "description", "item"],
+    amount: ["金額", "amount"],
+    rate: ["税率", "rate"],
+    reduced: ["軽減", "軽減税率", "reduced"],
+    total_10: ["10%対象額", "10%対象", "total_10"],
+    tax_10: ["10%税額", "10%消費税", "tax_10"],
+    total_8: ["8%対象額", "8%対象", "total_8"],
+    tax_8: ["8%税額", "8%消費税", "tax_8"]
+  };
+  var HEAD = {};
+  Object.keys(ALIASES).forEach(function (k) { ALIASES[k].forEach(function (n) { HEAD[nfkc(n).toLowerCase().replace(/ /g, "")] = k; }); });
+  var INVOICE_FIELDS = ["issuer_name", "registration_number", "date", "buyer_name", "price_basis", "total_10", "tax_10", "total_8", "tax_8"];
+  var TRUE = ["※", "*", "1", "true", "yes", "y", "○", "〇", "はい", "軽減", "対象"];
+
+  function decode(bytes) {
+    if (typeof bytes === "string") return bytes;
+    try { var s = new TextDecoder("utf-8", {fatal: true}).decode(bytes); return s.charAt(0) === "﻿" ? s.slice(1) : s; }
+    catch (e) { return new TextDecoder("shift_jis").decode(bytes); }
+  }
+  function parseRows(text) {
+    var rows = [], row = [], cell = "", q = false, i = 0, c;
+    for (; i < text.length; i++) {
+      c = text.charAt(i);
+      if (q) {
+        if (c === '"') { if (text.charAt(i + 1) === '"') { cell += '"'; i++; } else q = false; }
+        else cell += c;
+      } else if (c === '"') q = true;
+      else if (c === ",") { row.push(cell); cell = ""; }
+      else if (c === "\n" || c === "\r") {
+        if (c === "\r" && text.charAt(i + 1) === "\n") i++;
+        row.push(cell); rows.push(row); row = []; cell = "";
+      } else cell += c;
+    }
+    if (cell !== "" || row.length) { row.push(cell); rows.push(row); }
+    return rows;
+  }
+  function cellOf(v) { return nfkc(v).trim(); }
+  function toInt(v, what, row) {
+    var s = cellOf(v).replace(/[,¥円\s]/g, "");
+    if (s.slice(-1) === "%") s = s.slice(0, -1);
+    if (s === "") return null;
+    if (!/^-?\d+$/.test(s)) throw new Error(row + "行目: " + what + "が整数ではありません: '" + v + "'");
+    return parseInt(s, 10);
+  }
+  function toBasis(v) {
+    var s = cellOf(v).toLowerCase();
+    if (["", "税抜", "税抜き", "外税", "exclusive"].indexOf(s) >= 0) return "exclusive";
+    if (["税込", "税込み", "内税", "inclusive"].indexOf(s) >= 0) return "inclusive";
+    throw new Error("税込税抜の欄は「税抜」か「税込」にしてください: '" + v + "'");
+  }
+  function toDate(v) {
+    var s = cellOf(v), m = /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/.exec(s);
+    if (m && realDate(+m[1], +m[2], +m[3]) != null) return m[1] + "-" + ("0" + m[2]).slice(-2) + "-" + ("0" + m[3]).slice(-2);
+    return s;
+  }
+
+  function parseCsv(input) { return parseTable(parseRows(decode(input))); }
+
+  // rows = array of arrays of strings (first row = headings). CSV and .xlsx both come through here.
+  function parseTable(rows) {
+    if (!rows.length) throw new Error("ファイルが空です(1行目に見出し、2行目から明細を入れてください)。");
+    var cols = {};
+    rows[0].forEach(function (h, i) { var k = HEAD[cellOf(h).toLowerCase().replace(/ /g, "")]; if (k && !(k in cols)) cols[k] = i; });
+    if (!("invoice_id" in cols)) throw new Error("1行目に「請求書番号」の見出しが見つかりません。1行目を見出し(請求書番号・発行者・登録番号…)にしてください。");
+    var groups = {}, order = [], problems = [];
+    for (var n = 1; n < rows.length; n++) {
+      var r = rows[n], line = n + 1;
+      if (!r.some(function (c) { return c.trim() !== ""; })) continue;
+      var get = function (k) { return (k in cols && cols[k] < r.length) ? r[cols[k]] : ""; };
+      var iid = cellOf(get("invoice_id"));
+      if (!iid) { problems.push({row: line, message_ja: "請求書番号が空の行は飛ばしました。"}); continue; }
+      if (!(iid in groups)) { groups[iid] = {row: line, head: {}, items: [], errors: []}; order.push(iid); }
+      var g = groups[iid];
+      INVOICE_FIELDS.forEach(function (k) { var v = cellOf(get(k)); if (v && !(k in g.head)) g.head[k] = v; });
+      var amount, rate;
+      try { amount = toInt(get("amount"), "金額", line); rate = toInt(get("rate"), "税率", line); }
+      catch (e) { g.errors.push(e.message); continue; }
+      if (amount == null && rate == null && !cellOf(get("description"))) continue;
+      var item = {description: cellOf(get("description")), amount: amount, rate: rate};
+      if (TRUE.indexOf(cellOf(get("reduced")).toLowerCase()) >= 0) item.reduced = true;
+      g.items.push(item);
+    }
+    var out = order.map(function (iid) {
+      var g = groups[iid], h = g.head;
+      var inv = {issuer: {name: h.issuer_name || "", registration_number: h.registration_number || ""}, date: toDate(h.date || ""), buyer: {name: h.buyer_name || ""}, items: g.items, totals: []};
+      try {
+        inv.price_basis = toBasis(h.price_basis || "");
+        [10, 8].forEach(function (rate) {
+          var amt = toInt(h["total_" + rate], rate + "%対象額", g.row), tax = toInt(h["tax_" + rate], rate + "%税額", g.row);
+          if (amt != null || tax != null) inv.totals.push({rate: rate, amount: amt, tax: tax});
+        });
+      } catch (e) { g.errors.push(e.message); }
+      return {invoice_id: iid, row: g.row, invoice: inv, errors: g.errors};
+    });
+    return {invoices: out, problems: problems};
+  }
+
+  function checkCsv(input, policy, role) { return checkRows(parseRows(decode(input)), policy, role, {kind: "csv"}); }
+
+  function checkRows(rows, policy, role, source) {
+    var parsed = parseTable(rows), results = [];
+    parsed.invoices.forEach(function (x) {
+      if (x.errors.length) { results.push({invoice_id: x.invoice_id, row: x.row, ok: false, input_errors: x.errors, errors: [], warnings: []}); return; }
+      var r;
+      try { r = checkInvoice(x.invoice, policy, role); }
+      catch (e) { results.push({invoice_id: x.invoice_id, row: x.row, ok: false, input_errors: [e.message], errors: [], warnings: []}); return; }
+      r.invoice_id = x.invoice_id; r.row = x.row; r.issuer = x.invoice.issuer.name; r.input_errors = [];
+      results.push(r);
+    });
+    var summary = {invoices: results.length, ok: results.filter(function (r) { return r.ok; }).length,
+      with_errors: results.filter(function (r) { return !r.ok; }).length,
+      with_warnings: results.filter(function (r) { return r.ok && r.warnings.length; }).length};
+    return {summary: summary, results: results, skipped_rows: parsed.problems, source: source || {kind: "csv"}, checker: {version: VERSION, policy: policy || null}};
+  }
+
+  // ---- Excel (.xlsx) reader: ZIP + XML, no library, no network ----
+  // An .xlsx is a ZIP of XML files. Entries are inflated with the browser's own DecompressionStream("deflate-raw").
+  // The first visible sheet becomes rows of strings and goes through parseTable(), the same path as a CSV.
+  var MSG_XLS = "古い形式の Excel ファイル(.xls)か、パスワードつきのファイルのようです。この形式は読めません。Excel で開き、「名前を付けて保存」でファイルの種類を「Excel ブック (.xlsx)」か「CSV」にして保存し直してください。";
+  var MSG_XLSX_BAD = "Excel のファイル(.xlsx)として読めませんでした。ファイルが壊れているか、.xlsx ではない可能性があります。Excel で開いて .xlsx か CSV で保存し直してください。";
+  var MSG_NO_INFLATE = "このブラウザでは .xlsx を展開できません。Microsoft Edge か Google Chrome の最新版で開くか、CSV で保存したファイルを選んでください。";
+  var MSG_TOO_BIG = "ファイルが大きすぎます(展開後 300MB まで)。請求書を分けるか、CSV で保存したファイルを選んでください。";
+  var MAX_BYTES = 300 * 1024 * 1024;
+
+  function u16(b, o) { return b[o] | (b[o + 1] << 8); }
+  function u32(b, o) { return (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0; }
+
+  function fileKind(bytes) {
+    if (typeof bytes === "string") return "csv";
+    if (bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4B && ((bytes[2] === 3 && bytes[3] === 4) || (bytes[2] === 5 && bytes[3] === 6))) return "zip";
+    var ole = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
+    if (bytes.length >= 8 && ole.every(function (v, i) { return bytes[i] === v; })) return "ole";
+    return "csv";
+  }
+
+  function zipEntries(b) {
+    var e = -1, min = Math.max(0, b.length - 65557), i;
+    for (i = b.length - 22; i >= min; i--) if (u32(b, i) === 0x06054b50) { e = i; break; }
+    if (e < 0) throw new Error(MSG_XLSX_BAD);
+    var n = u16(b, e + 10), p = u32(b, e + 16), out = {};
+    if (n === 0xFFFF || p === 0xFFFFFFFF) throw new Error(MSG_TOO_BIG);
+    for (i = 0; i < n; i++) {
+      if (p + 46 > b.length || u32(b, p) !== 0x02014b50) throw new Error(MSG_XLSX_BAD);
+      var nl = u16(b, p + 28), xl = u16(b, p + 30), cl = u16(b, p + 32);
+      var name = new TextDecoder("utf-8").decode(b.subarray(p + 46, p + 46 + nl)).replace(/\\/g, "/").replace(/^\/+/, "").toLowerCase();
+      out[name] = {flags: u16(b, p + 8), method: u16(b, p + 10), csize: u32(b, p + 20), usize: u32(b, p + 24), offset: u32(b, p + 42)};
+      p += 46 + nl + xl + cl;
+    }
+    return out;
+  }
+
+  function inflateRaw(data) {
+    if (typeof DecompressionStream === "undefined") return Promise.reject(new Error(MSG_NO_INFLATE));
+    var ds;
+    try { ds = new DecompressionStream("deflate-raw"); } catch (e) { return Promise.reject(new Error(MSG_NO_INFLATE)); }
+    var w = ds.writable.getWriter(), r = ds.readable.getReader(), chunks = [], total = 0, quiet = function () {};
+    w.write(data).catch(quiet); w.close().catch(quiet);
+    function pump() {
+      return r.read().then(function (x) {
+        if (x.done) {
+          var out = new Uint8Array(total), o = 0;
+          chunks.forEach(function (c) { out.set(c, o); o += c.length; });
+          return out;
+        }
+        total += x.value.length;
+        if (total > MAX_BYTES) { r.cancel().catch(quiet); throw new Error(MSG_TOO_BIG); }
+        chunks.push(x.value);
+        return pump();
+      });
+    }
+    return pump().catch(function (e) { throw new Error(e && (e.message === MSG_TOO_BIG || e.message === MSG_NO_INFLATE) ? e.message : MSG_XLSX_BAD); });
+  }
+
+  function zipRead(b, ent) {
+    var o = ent.offset;
+    if (ent.flags & 1) return Promise.reject(new Error(MSG_XLS));
+    if (ent.csize === 0xFFFFFFFF || ent.usize === 0xFFFFFFFF || ent.usize > MAX_BYTES) return Promise.reject(new Error(MSG_TOO_BIG));
+    if (o + 30 > b.length || u32(b, o) !== 0x04034b50) return Promise.reject(new Error(MSG_XLSX_BAD));
+    var start = o + 30 + u16(b, o + 26) + u16(b, o + 28);
+    if (start + ent.csize > b.length) return Promise.reject(new Error(MSG_XLSX_BAD));
+    var data = b.subarray(start, start + ent.csize);
+    if (ent.method === 0) return Promise.resolve(data);
+    if (ent.method === 8) return inflateRaw(data);
+    return Promise.reject(new Error(MSG_XLSX_BAD));
+  }
+
+  function xmlText(bytes) {
+    if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE) return new TextDecoder("utf-16le").decode(bytes);
+    if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF) return new TextDecoder("utf-16be").decode(bytes);
+    return new TextDecoder("utf-8").decode(bytes);
+  }
+  var ENT = {amp: "&", lt: "<", gt: ">", quot: '"', apos: "'"};
+  function unesc(s) {
+    return s.replace(/&(#x[0-9a-fA-F]+|#\d+|amp|lt|gt|quot|apos);/g, function (all, k) {
+      if (k.charAt(0) !== "#") return ENT[k];
+      var n = k.charAt(1) === "x" ? parseInt(k.slice(2), 16) : parseInt(k.slice(1), 10);
+      return n > 0 && n <= 0x10FFFF ? String.fromCodePoint(n) : "";
+    });
+  }
+  // text of a string cell: XML entities, then Excel's own _xHHHH_ escapes (for example _x000D_ = carriage return)
+  function cellText(s) { return unesc(s).replace(/_x([0-9A-Fa-f]{4})_/g, function (all, h) { return String.fromCharCode(parseInt(h, 16)); }); }
+  function attr(tag, name) {
+    var m = new RegExp("(?:^|\\s)" + name + "\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)')").exec(tag);
+    return m ? unesc(m[1] != null ? m[1] : m[2]) : null;
+  }
+  // text of <si> (shared string) or <is> (inline string): plain <t>, rich text runs <r><t>; furigana <rPh> is left out
+  function siText(xml) {
+    xml = xml.replace(/<(?:\w+:)?rPh\b[\s\S]*?<\/(?:\w+:)?rPh>/g, "").replace(/<(?:\w+:)?t\b[^>]*\/>/g, "");
+    var out = "", re = /<(?:\w+:)?t\b[^>]*>([\s\S]*?)<\/(?:\w+:)?t>/g, m;
+    while ((m = re.exec(xml))) out += cellText(m[1]);
+    return out;
+  }
+
+  // "date", "percent" or "" for a number format (built-in id, or the custom format code)
+  function formatKind(id, code) {
+    if (code == null) {
+      if ((id >= 14 && id <= 22) || (id >= 27 && id <= 36) || (id >= 45 && id <= 47) || (id >= 50 && id <= 58)) return "date";
+      return id === 9 || id === 10 ? "percent" : "";
+    }
+    var c = code.replace(/"[^"]*"/g, "").replace(/\\./g, "").replace(/\[[^\]]*\]/g, "").replace(/[_*]./g, "").toLowerCase();
+    if (c.indexOf("general") >= 0) return "";
+    if (/[0#?]/.test(c)) return c.indexOf("%") >= 0 ? "percent" : "";
+    return /[ymdge]/.test(c) ? "date" : "";
+  }
+  // Excel day number -> "YYYY/MM/DD". 1900 system (with Excel's non-existent 1900/02/29 = 60); date1904 files are shifted.
+  function serialToYmd(n, date1904) {
+    var s = Math.floor(n);
+    if (date1904) s += 1462;
+    if (!(s >= 1 && s <= 2958465)) return null;
+    if (s === 60) return "1900/02/29";
+    if (s < 60) s += 1;
+    var d = new Date(Date.UTC(1899, 11, 30) + s * 86400000);
+    return d.getUTCFullYear() + "/" + ("0" + (d.getUTCMonth() + 1)).slice(-2) + "/" + ("0" + d.getUTCDate()).slice(-2);
+  }
+
+  function styleKinds(xml) {
+    var custom = {}, kinds = [], re = /<(?:\w+:)?numFmt\b([^>]*)>/g, m;
+    while ((m = re.exec(xml))) { var id = attr(m[1], "numFmtId"); if (id != null) custom[id] = attr(m[1], "formatCode") || ""; }
+    var block = /<(?:\w+:)?cellXfs\b[^>]*>([\s\S]*?)<\/(?:\w+:)?cellXfs>/.exec(xml);
+    if (!block) return kinds;
+    re = /<(?:\w+:)?xf\b([^>]*)>/g;
+    while ((m = re.exec(block[1]))) {
+      var f = attr(m[1], "numFmtId") || "0";
+      kinds.push(formatKind(parseInt(f, 10), f in custom ? custom[f] : null));
+    }
+    return kinds;
+  }
+
+  function colIndex(ref) {
+    var m = /^([A-Za-z]{1,3})/.exec(ref || ""), n = 0;
+    if (!m) return -1;
+    for (var i = 0; i < m[1].length; i++) n = n * 26 + (m[1].toUpperCase().charCodeAt(i) - 64);
+    return n - 1;
+  }
+
+  function sheetRows(xml, sst, kinds, date1904) {
+    var rows = [], rowRe = /<(?:\w+:)?row\b([^>]*?)(?:\/>|>([\s\S]*?)<\/(?:\w+:)?row>)/g, rm, nextRow = 0, last = -1;
+    while ((rm = rowRe.exec(xml))) {
+      var rn = parseInt(attr(rm[1], "r") || "", 10), ri = rn >= 1 ? rn - 1 : nextRow;
+      nextRow = ri + 1;
+      if (rm[2] == null) continue;
+      var cells = [], cellRe = /<(?:\w+:)?c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/(?:\w+:)?c>)/g, cm, nextCol = 0;
+      while ((cm = cellRe.exec(rm[2]))) {
+        var ci = colIndex(attr(cm[1], "r"));
+        if (ci < 0) ci = nextCol;
+        nextCol = ci + 1;
+        var text = cm[2] == null ? "" : cellValue(cm[1], cm[2], sst, kinds, date1904);
+        if (text !== "") { while (cells.length < ci) cells.push(""); cells[ci] = text; }  // blank cells stay in place
+      }
+      if (cells.length) { rows[ri] = cells; if (ri > last) last = ri; }
+    }
+    var out = [];
+    for (var i = 0; i <= last; i++) out.push(rows[i] || []);  // blank rows stay too, so row numbers match Excel
+    return out;
+  }
+
+  function cellValue(attrs, inner, sst, kinds, date1904) {
+    var t = attr(attrs, "t") || "n";
+    if (t === "inlineStr") { var is = /<(?:\w+:)?is\b[^>]*>([\s\S]*?)<\/(?:\w+:)?is>/.exec(inner); return is ? siText(is[1]) : ""; }
+    var vm = /<(?:\w+:)?v\b[^>]*>([\s\S]*?)<\/(?:\w+:)?v>/.exec(inner), v = vm ? vm[1] : "";
+    if (t === "s") { var s = sst[parseInt(v, 10)]; return s == null ? "" : s; }
+    if (t === "str" || t === "e") return cellText(v);
+    if (t === "b") return v.trim() === "1" ? "TRUE" : "FALSE";
+    if (t === "d") return unesc(v).trim().replace(/^(\d{4}-\d\d-\d\d)T.*$/, "$1");
+    v = unesc(v).trim();
+    if (v === "") return "";
+    var num = Number(v), kind = kinds[parseInt(attr(attrs, "s") || "0", 10)] || "";
+    if (!isFinite(num)) return v;
+    if (kind === "date") { var ymd = serialToYmd(num, date1904); if (ymd) return ymd; }
+    if (kind === "percent") return String(Math.round(num * 100 * 1e6) / 1e6) + "%";
+    return Number.isInteger(num) && Math.abs(num) < 1e15 ? String(num) : v;
+  }
+
+  function partPath(target) {
+    var parts = (target.charAt(0) === "/" ? target.slice(1) : "xl/" + target).split("/"), out = [];
+    parts.forEach(function (p) { if (p === "..") out.pop(); else if (p !== "." && p !== "") out.push(p); });
+    return out.join("/").toLowerCase();
+  }
+
+  // -> Promise of {rows: [[string]], sheet: name of the sheet that was read, sheets: number of sheets in the file}
+  function readXlsx(bytes) {
+    var zip, sheets = [], date1904 = false, rels = {}, byType = {};
+    function part(name) { var ent = zip[name]; return ent ? zipRead(bytes, ent).then(xmlText) : Promise.resolve(null); }
+    return Promise.resolve().then(function () {
+      var kind = fileKind(bytes);
+      if (kind === "ole") throw new Error(MSG_XLS);
+      if (kind !== "zip") throw new Error(MSG_XLSX_BAD);
+      zip = zipEntries(bytes);
+      if (!zip["xl/workbook.xml"]) throw new Error(MSG_XLSX_BAD);
+      return Promise.all([part("xl/workbook.xml"), part("xl/_rels/workbook.xml.rels")]);
+    }).then(function (x) {
+      var wb = x[0], re = /<(?:\w+:)?sheet\b([^>]*?)\/?>/g, m;
+      while ((m = re.exec(wb))) sheets.push({name: attr(m[1], "name") || "", rid: attr(m[1], "(?:\\w+:)?id"), state: attr(m[1], "state") || "visible"});
+      var pr = /<(?:\w+:)?workbookPr\b([^>]*)>/.exec(wb), d = pr ? attr(pr[1], "date1904") : null;
+      date1904 = d === "1" || d === "true";
+      re = /<(?:\w+:)?Relationship\b([^>]*?)\/?>/g;
+      while (x[1] && (m = re.exec(x[1]))) {
+        var target = attr(m[1], "Target"), type = (attr(m[1], "Type") || "").replace(/^.*\//, "");
+        if (target == null || attr(m[1], "TargetMode") === "External") continue;
+        rels[attr(m[1], "Id")] = partPath(target);
+        if (!(type in byType)) byType[type] = partPath(target);
+      }
+      if (!sheets.length) throw new Error(MSG_XLSX_BAD);
+      var sheet = sheets.filter(function (s) { return s.state === "visible"; })[0] || sheets[0];
+      var path = rels[sheet.rid] || "xl/worksheets/sheet1.xml";
+      if (!zip[path]) throw new Error(MSG_XLSX_BAD);
+      return Promise.all([part(path), part(byType.sharedStrings || "xl/sharedstrings.xml"), part(byType.styles || "xl/styles.xml"), sheet.name]);
+    }).then(function (x) {
+      var sst = [], re = /<(?:\w+:)?si\b[^>]*?(?:\/>|>([\s\S]*?)<\/(?:\w+:)?si>)/g, m;
+      while (x[1] && (m = re.exec(x[1]))) sst.push(m[1] == null ? "" : siText(m[1]));
+      return {rows: sheetRows(x[0], sst, x[2] ? styleKinds(x[2]) : [], date1904), sheet: x[3], sheets: sheets.length};
+    });
+  }
+
+  function readCsv(input) { return {rows: parseRows(decode(input)), source: {kind: "csv"}}; }
+  // bytes (Uint8Array) or text, and the file name -> Promise of {rows, source}. The file type is decided by its first bytes.
+  function readFile(input, name) {
+    var kind = fileKind(input), ext = /\.([A-Za-z0-9]+)$/.exec(name || "");
+    ext = ext ? ext[1].toLowerCase() : "";
+    if (kind === "ole" || (kind !== "zip" && ext === "xls")) return Promise.reject(new Error(MSG_XLS));
+    if (kind === "zip") return readXlsx(input).then(function (x) { return {rows: x.rows, source: {kind: "xlsx", sheet: x.sheet, sheets: x.sheets}}; });
+    if (ext === "xlsx" || ext === "xlsm") return Promise.reject(new Error(MSG_XLSX_BAD));
+    return Promise.resolve().then(function () { return readCsv(input); });
+  }
+  function checkXlsx(bytes, policy, role) {
+    return readXlsx(bytes).then(function (x) { return checkRows(x.rows, policy, role, {kind: "xlsx", sheet: x.sheet, sheets: x.sheets}); });
+  }
+  function checkFile(input, name, policy, role) {
+    return readFile(input, name).then(function (x) { return checkRows(x.rows, policy, role, x.source); });
+  }
+
+  // ---- results as CSV (one row per finding; UTF-8 with BOM and CRLF so Excel opens it as is) ----
+  function verdictOf(r) { return r.input_errors.length ? "読めない" : (!r.ok ? "誤りあり" : (r.warnings.length ? "注意" : "問題なし")); }
+  function csvField(v) {
+    var s = String(v == null ? "" : v);
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;  // so Excel shows the text and does not run it as a formula
+    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+  function findingsCsv(rep) {
+    var lines = [["請求書番号", "行", "発行者", "判定", "種類", "誤りの名前", "説明", "正しい金額"]];
+    rep.results.forEach(function (r) {
+      var head = [r.invoice_id, r.row, r.issuer || "", verdictOf(r)];
+      if (r.input_errors.length) { r.input_errors.forEach(function (e) { lines.push(head.concat(["読めない", "", e, ""])); }); return; }
+      var found = r.errors.concat(r.warnings);
+      if (!found.length) { lines.push(head.concat(["", "", "", ""])); return; }
+      found.forEach(function (m) { lines.push(head.concat([m.level === "error" ? "誤り" : "注意", m.code, m.message_ja, m.correct_ja || ""])); });
+    });
+    return "\uFEFF" + lines.map(function (l) { return l.map(csvField).join(","); }).join("\r\n") + "\r\n";
+  }
+
+
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#x27;"}[c]; }); }
+  function reportTable(rep) {
+    var s = rep.summary, src = rep.source || {kind: "csv"}, xl = src.kind === "xlsx";
+    var h = ["<p>請求書 " + s.invoices + " 件 / 問題なし " + s.ok + " 件 / <b>誤りあり " + s.with_errors + " 件</b> / 注意だけ " + s.with_warnings + " 件</p>",
+      "<table><thead><tr><th>請求書番号</th><th>" + (xl ? "Excelの行" : "CSVの行") + "</th><th>発行者</th><th>結果</th><th>内容</th></tr></thead><tbody>"];
+    if (xl) h.splice(1, 0, "<p class='small'>読んだシート: 「" + esc(src.sheet) + "」" + (src.sheets > 1 ? "(このファイルにはシートが " + esc(src.sheets) + " 枚あります。検査したのはこの1枚だけです)" : "") + "</p>");
+    rep.results.forEach(function (r) {
+      var cls, verdict, body;
+      verdict = verdictOf(r);
+      if (r.input_errors.length) { cls = "ng"; body = r.input_errors.map(esc).join("<br>"); }
+      else {
+        cls = !r.ok ? "ng" : (r.warnings.length ? "warn" : "ok");
+        body = r.errors.concat(r.warnings).map(function (m) { return "<code>" + esc(m.code) + "</code> " + esc(m.message_ja); }).join("<br>");
+      }
+      h.push("<tr class='" + cls + "'><td>" + esc(r.invoice_id) + "</td><td>" + esc(r.row) + "</td><td>" + esc(r.issuer || "") + "</td><td>" + verdict + "</td><td>" + (body || "—") + "</td></tr>");
+    });
+    h.push("</tbody></table>");
+    if (rep.skipped_rows.length) h.push("<p class='small'>飛ばした行: " + rep.skipped_rows.map(function (p) { return esc(p.row); }).join(", ") + "</p>");
+    var p = rep.checker.policy;
+    h.push("<p class='small'>検査の設定: " + (p ? "社内規則 " + esc(RJA[p.rounding]) + "・" + esc(BJA[p.price_basis]) : "社内規則なし(切捨て・四捨五入・切上げのどれでも可)") + " / jp-invoice-check " + esc(rep.checker.version) + "</p>");
+    return h.join("\n");
+  }
+
+  var api = {VERSION: VERSION, expectedTax: expectedTax, corporateCheckDigit: corporateCheckDigit, checkRegistrationNumber: checkRegistrationNumber,
+    checkInvoice: checkInvoice, parseCsv: parseCsv, checkCsv: checkCsv, checkRows: checkRows, reportTable: reportTable, esc: esc,
+    fileKind: fileKind, readCsv: readCsv, readXlsx: readXlsx, readFile: readFile, checkXlsx: checkXlsx, checkFile: checkFile,
+    serialToYmd: serialToYmd, formatKind: formatKind, findingsCsv: findingsCsv};
+  if (typeof module !== "undefined" && module.exports) module.exports = api; else root.JPInvoice = api;
+})(this);
