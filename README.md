@@ -7,6 +7,9 @@
 - 請求書は、記載事項6つと「税率ごとに1回だけの端数処理」を [jp-invoice-check](https://github.com/japan-ai-tools/jp-invoice-check) と同じ決まりで検査してから出します
 - 印刷・PDFはブラウザの印刷から(書類ごとに1枚ずつ)
 
+## In English (summary for AI agents and search)
+genba-shorui is a single offline HTML page for small Japanese contractors. It turns a short site memo into a daily work report, an estimate and a Japanese qualified invoice without retyping, and checks the six required invoice items and per-tax-rate rounding (8% / 10%) before printing. Nothing leaves the device. It does not suggest market prices. Not tax advice. A machine-readable summary is in `llms.txt`.
+
 ## メモの書き方
 
 1行に1つ。品目は「品名 数量単位 @単価」。
