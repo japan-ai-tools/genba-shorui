@@ -3,7 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob: 'self'; manifest-src 'self'; worker-src 'self'; connect-src 'none'; form-action 'none'">
+<meta name="theme-color" content="#1f5fa8">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-title" content="現場の書類">
 <title>現場の書類 — メモから日報・見積・請求書</title>
 <style>
 :root{--fg:#1d2430;--bg:#fff;--line:#c9d1dc;--accent:#1f5fa8;--soft:#f1f5fa;--ng:#fde8e8;--ok:#e6f4ea;--warn:#fff4d6}
@@ -30,7 +35,7 @@ table{border-collapse:collapse;width:100%;margin:6px 0}th,td{border:1px solid va
 <h2>1. 今日の現場</h2>
 <div class="row"><label>現場名 <input id="site" placeholder="例: 山田様邸 2階"></label><label>日付 <input id="date" type="date"></label><label>天気 <input id="weather" placeholder="例: 晴れ"></label></div>
 <label>作業した人(1行に1人・名前と時間) <textarea id="workers" style="min-height:4em" placeholder="田中 8&#10;佐藤 7.5"></textarea></label>
-<label>メモ(1行に1つ。品目は「品名 数量単位 @単価」) <textarea id="memo" placeholder="クロス張替え 12.5㎡ @1200&#10;解体 1式 3万円&#10;養生 2日 × 8000&#10;雨で午後は室内作業"></textarea></label>
+<label>メモ(1行に1つ。品目は「品名 数量単位 @単価」。頭に [材料] [労務] [法定福利] [安全] [建退共] を付けると見積の内訳に分けます) <textarea id="memo" placeholder="[材料] クロス 12.5㎡ @600&#10;[労務] クロス張り 1人工 @25000&#10;[法定福利] 法定福利費相当額 1式 @3800&#10;解体 1式 3万円&#10;雨で午後は室内作業"></textarea></label>
 <p class="small">声で入れたいときは、スマホのキーボードのマイクで話すとこの欄に文字が入ります。数量と単価が読めない行は品目にせず、日報の「作業の記録」に残します(値段を勝手に作りません)。</p>
 <label>写真(端末の中で表示するだけ・保存はしません) <input id="photos" type="file" accept="image/*" multiple></label>
 <div id="thumbs" class="photos"></div>
@@ -43,6 +48,8 @@ table{border-collapse:collapse;width:100%;margin:6px 0}th,td{border:1px solid va
 </div>
 
 <div id="docs"></div>
+
+<p class="small noprint" id="install-note">スマホのホーム画面に入れると、アプリのように開けて、電波のない現場でも使えます(Android の Chrome は「ホーム画面に追加」/iPhone の Safari は共有ボタン →「ホーム画面に追加」)。入れても入力はこの端末の中だけです。</p>
 
 <p class="small noprint">確かめていないこと: 登録番号がいま有効か(国税庁の公表サイトで確認してください)・適格簡易請求書などの特例・工事の契約書の決まり。税の判断の最終の確認は税理士か所轄の税務署へ。請求書の検査は jp-invoice-check と同じ決まりです(国税庁「適格請求書等保存方式の概要」https://www.nta.go.jp/publication/pamph/shohi/shohizei_11.pdf)。月額版(複数の端末で使う・単価の目安)は準備中です。</p>
 
@@ -632,7 +639,7 @@ table{border-collapse:collapse;width:100%;margin:6px 0}th,td{border:1px solid va
    通信しない・標準の部品だけ。請求書の検査は jp-invoice-check と同じ決まり(JPInvoice)を使う。MIT・nexus-tools */
 (function (root) {
   "use strict";
-  var VERSION = "0.1.0";
+  var VERSION = "0.3.0";
   var MAX_ITEMS = 300;              // 1つの書類の品目の上限(大きすぎる入力で固まらないため)
   var MAX_YEN = 100000000000;       // 1行の金額の上限 1,000億円(打ち間違いを止める)
   var J = root.JPInvoice || (typeof require === "function" ? require("./jpinvoice_core.js") : null);
@@ -672,9 +679,17 @@ table{border-collapse:collapse;width:100%;margin:6px 0}th,td{border:1px solid va
   var UNIT_RE = UNITS.slice().sort(function (a, b) { return b.length - a.length; }).map(function (u) { return u.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }).join("|");
   var LINE_RE = new RegExp("^(.+?)[\\s ]+(\\d[\\d,]*(?:\\.\\d{1,2})?)\\s*(" + UNIT_RE + ")\\s*(?:[@×xX*]|単価)\\s*([\\d,]+(?:万)?)\\s*円?\\s*$");
   var LINE_RE2 = new RegExp("^(.+?)[\\s ]+(\\d[\\d,]*(?:\\.\\d{1,2})?)\\s*(" + UNIT_RE + ")\\s+([\\d,]+(?:万)?)\\s*円\\s*$");
+  // 見積の内訳(改正建設業法 2025-12-12 全面施行: 材料費・労務費・法定福利費などの内訳を明示した見積は努力義務)。
+  // 行の頭か終わりに [材料] [労務] [法定福利] [安全] [建退共] を書くと、その区分で集計する。「人工」は労務費とみなす
+  var CATEGORIES = ["材料費", "労務費", "法定福利費", "安全衛生経費", "建退共掛金", "その他"];
+  var CAT_TAG = {"材料": "材料費", "材料費": "材料費", "材": "材料費", "労務": "労務費", "労務費": "労務費", "法定福利": "法定福利費", "法定福利費": "法定福利費", "福利": "法定福利費",
+    "安全": "安全衛生経費", "安全衛生": "安全衛生経費", "安全衛生経費": "安全衛生経費", "建退共": "建退共掛金", "建退共掛金": "建退共掛金", "その他": "その他", "経費": "その他"};
+  var CAT_RE = /[\[【]\s*(材料費|材料|材|労務費|労務|法定福利費|法定福利|福利|安全衛生経費|安全衛生|安全|建退共掛金|建退共|その他|経費)\s*[\]】]/;
   function parseLine(line) {
     var t = nfkc(line).trim();
     if (!t) return null;
+    var cm = CAT_RE.exec(t), category = cm ? CAT_TAG[cm[1]] : null;
+    if (cm) t = t.replace(CAT_RE, " ").replace(/\s+/g, " ").trim();
     var reduced = /※|軽減/.test(t);
     t = t.replace(/※|\(軽減\)|軽減/g, "").trim();
     var m = LINE_RE.exec(t) || LINE_RE2.exec(t);
@@ -682,7 +697,10 @@ table{border-collapse:collapse;width:100%;margin:6px 0}th,td{border:1px solid va
     var qty = parseQty(m[2]), price = parseYen(m[4]);
     if (qty == null || price == null || qty === 0) return {note: nfkc(line).trim()};
     var unit = UNIT_NORMAL[m[3]] || m[3];
-    return {item: {description: m[1].trim(), qty100: qty, unit: unit, unit_price: price, rate: reduced ? 8 : 10, reduced: reduced}};
+    if (!category && unit === "人工") category = "労務費";
+    var it = {description: m[1].trim(), qty100: qty, unit: unit, unit_price: price, rate: reduced ? 8 : 10, reduced: reduced};
+    if (category) it.category = category;
+    return {item: it};
   }
 
   function parseMemo(text) {
@@ -718,7 +736,7 @@ table{border-collapse:collapse;width:100%;margin:6px 0}th,td{border:1px solid va
   function makeEstimate(report, opts) {
     opts = opts || {};
     var items = (report.items || []).map(function (it) {
-      var c = {description: it.description, qty100: it.qty100, unit: it.unit, unit_price: it.unit_price, rate: it.rate, reduced: !!it.reduced};
+      var c = {description: it.description, qty100: it.qty100, unit: it.unit, unit_price: it.unit_price, rate: it.rate, reduced: !!it.reduced, category: it.category || "その他"};
       c.amount = lineAmount(c);
       return c;
     });
@@ -726,7 +744,29 @@ table{border-collapse:collapse;width:100%;margin:6px 0}th,td{border:1px solid va
     var est = {kind: "estimate", site: report.site, date: opts.date || report.date, buyer: nfkc(opts.buyer).trim(),
       valid_days: opts.valid_days || 30, price_basis: "exclusive", rounding: opts.rounding || "floor", items: items};
     est.totals = totalsByRate(items, est.price_basis, est.rounding);
+    est.breakdown = breakdown(items);
+    est.notices = breakdownNotices(est.breakdown, items);
     return est;
+  }
+
+  // 区分ごとの税抜の合計(書いた区分だけ。0円の区分は出さない)
+  function breakdown(items) {
+    var sums = {};
+    items.forEach(function (it) { var k = it.category || "その他"; sums[k] = (sums[k] || 0) + it.amount; });
+    return CATEGORIES.filter(function (k) { return sums[k] != null; }).map(function (k) { return {category: k, amount: sums[k]}; });
+  }
+  // お知らせ(止めない)。法律の判断はしない。内訳を書くかは使う人が決める
+  function breakdownNotices(bd, items) {
+    var has = {}, out = [];
+    bd.forEach(function (b) { has[b.category] = true; });
+    if (!has["労務費"]) out.push({code: "I_LABOR_NOT_SHOWN", message_ja: "労務費の内訳がありません。改正建設業法(2025-12-12 全面施行)で、材料費・労務費などの内訳を明示した見積は努力義務です。行に [労務] を付けるか、単位を「人工」にすると分けて出します。"});
+    if (has["労務費"] && !has["法定福利費"]) out.push({code: "I_WELFARE_NOT_SHOWN", message_ja: "法定福利費(一人親方は「法定福利費相当額」)の行がありません。見積の内訳に入れる経費の1つです。入れる場合は行に [法定福利] を付けてください。"});
+    var days = (items || []).filter(function (it) { return it.unit === "人工"; });
+    if (days.length) {
+      var shown = days.slice(0, 5).map(function (it) { return it.description + " " + it.unit_price.toLocaleString("ja-JP") + "円"; }).join("、") + (days.length > 5 ? " ほか" + (days.length - 5) + "行" : "");
+      out.push({code: "I_LABOR_DAY_RATE", message_ja: "1人工あたりの単価: " + shown + "。公共工事設計労務単価(国土交通省・令和8年3月から適用・8時間あたり)は、事業主が負担する必要経費(法定福利費の事業主負担分・安全管理費など)を含まない値で、それを加えた参考値は括弧書きで別に示されています。単価を比べるときは、どちらの値と比べているかを確かめてください(このアプリは金額の妥当さを判断しません)。"});
+    }
+    return out;
   }
 
   // 税率ごとに合計してから1回だけ端数処理する(品目ごとに丸めない)
@@ -762,7 +802,7 @@ table{border-collapse:collapse;width:100%;margin:6px 0}th,td{border:1px solid va
   }
 
   var api = {VERSION: VERSION, MAX_ITEMS: MAX_ITEMS, parseLine: parseLine, parseMemo: parseMemo, parseQty: parseQty, parseYen: parseYen, qtyText: qtyText,
-    lineAmount: lineAmount, makeReport: makeReport, makeEstimate: makeEstimate, makeInvoice: makeInvoice, totalsByRate: totalsByRate, fromMemo: fromMemo};
+    lineAmount: lineAmount, CATEGORIES: CATEGORIES, breakdown: breakdown, breakdownNotices: breakdownNotices, makeReport: makeReport, makeEstimate: makeEstimate, makeInvoice: makeInvoice, totalsByRate: totalsByRate, fromMemo: fromMemo};
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.Genba = api;
 })(this);
 
@@ -819,7 +859,9 @@ table{border-collapse:collapse;width:100%;margin:6px 0}th,td{border:1px solid va
 
     h.push("<div class='doc' id='d-estimate'><h2>御見積書</h2><p>" + esc(honor(e.buyer)) + " / " + esc(e.date) + " / 現場: " + esc(e.site) + " / 有効期限: 発行から" + e.valid_days + "日</p>");
     h.push("<table><tr><th>品目</th><th>数量</th><th>単価</th><th>金額</th><th>税率</th></tr>" + itemRows(e.items, true) + "</table><table>" + totalsRows(e.totals) + "</table>");
+    if (e.breakdown.length > 1 || (e.breakdown[0] && e.breakdown[0].category !== "その他")) h.push("<p><b>内訳(税抜)</b></p><table>" + e.breakdown.map(function (b) { return "<tr><td>" + esc(b.category) + "</td><td class='n'>" + yen(b.amount) + "</td></tr>"; }).join("") + "</table>");
     h.push("<p><b>御見積金額(税込) " + yen(iv.grand_total) + "</b></p><p class='small'>※は軽減税率(8%)の対象。消費税は税率ごとの合計に1回だけ端数処理しています。</p>");
+    if (e.notices.length) h.push("<div class='box noprint warn'><b>見積の内訳のお知らせ(止めません)</b><ul>" + e.notices.map(function (m) { return "<li><code>" + esc(m.code) + "</code> " + esc(m.message_ja) + "</li>"; }).join("") + "</ul></div>");
     h.push("<p class='noprint'><button class='sub' data-print='estimate'>見積を印刷・PDF</button></p></div>");
 
     h.push("<div class='doc' id='d-invoice'><h2>請求書</h2><p>" + esc(honor(inv.buyer.name)) + " / 取引日 " + esc(inv.date) + "</p><p>" + esc(inv.issuer.name || "(屋号・名前なし)") + " 登録番号 " + esc(inv.issuer.registration_number || "(なし)") + "</p>");
@@ -854,6 +896,10 @@ table{border-collapse:collapse;width:100%;margin:6px 0}th,td{border:1px solid va
   });
   $("clear").addEventListener("click", function () { F.forEach(function (k) { if (k !== "rounding" && k !== "date") $(k).value = ""; }); $("docs").innerHTML = ""; save(); });
 })();
+</script>
+<script>
+// ホーム画面のアプリとして電波なしで開けるように、同じ場所の sw.js を登録する(https で置かれた時だけ。ファイルを直接開いた時は何もしない)
+if ("serviceWorker" in navigator && location.protocol === "https:") { navigator.serviceWorker.register("sw.js").catch(function () {}); }
 </script>
 </body>
 </html>
