@@ -71,4 +71,38 @@ t("大きな入力: 300件までは作れて、301件は止める", () => {
   assert.throws(() => G.parseMemo(lines + "\n追加 1式 @1"), /多すぎ/);
   assert.equal(G.parseMemo("x".repeat(200000)).items.length, 0);   // 長い1行でも固まらない
 });
+t("見積の内訳: 区分の札と人工を読む", () => {
+  assert.equal(G.parseLine("[材料] クロス 12.5㎡ @600").item.category, "材料費");
+  assert.equal(G.parseLine("【労務】 クロス張り 1人工 @25000").item.category, "労務費");
+  assert.equal(G.parseLine("大工 2人工 @28000").item.category, "労務費");            // 人工は労務費
+  assert.equal(G.parseLine("法定福利費相当額 1式 @3800 [法定福利]").item.category, "法定福利費");
+  assert.equal(G.parseLine("[安全] 安全帯 1式 @2000").item.description, "安全帯");   // 札は品名に残さない
+  assert.equal(G.parseLine("クロス 1㎡ @600").item.category, undefined);
+  assert.ok(G.parseLine("[労務] 片付け").note);                                     // 値段なしは品目にしない
+});
+t("見積の内訳: 区分ごとの合計とお知らせ", () => {
+  const memo = "[材料] クロス 12.5㎡ @600\n[労務] クロス張り 1人工 @25000\n[法定福利] 法定福利費相当額 1式 @3800\n解体 1式 3万円";
+  const out = G.fromMemo({ site: "s", date: "2026-11-16", memo }, ISSUER, { buyer: "b" });
+  assert.deepEqual(out.estimate.breakdown, [{ category: "材料費", amount: 7500 }, { category: "労務費", amount: 25000 }, { category: "法定福利費", amount: 3800 }, { category: "その他", amount: 30000 }]);
+  assert.equal(out.estimate.breakdown.reduce((s, b) => s + b.amount, 0), out.estimate.totals.reduce((s, t) => s + t.amount, 0));
+  assert.deepEqual(out.estimate.notices.map((x) => x.code), ["I_LABOR_DAY_RATE"]);   // 人工の行があるときは単価の比べ方だけ知らせる
+  assert.equal(out.invoice.check.ok, true);
+  const noLabor = G.fromMemo({ site: "s", date: "2026-11-16", memo: "クロス 1㎡ @600" }, ISSUER, { buyer: "b" });
+  assert.deepEqual(noLabor.estimate.notices.map((x) => x.code), ["I_LABOR_NOT_SHOWN"]);
+  const noWelfare = G.fromMemo({ site: "s", date: "2026-11-16", memo: "大工 1人工 @28000" }, ISSUER, { buyer: "b" });
+  assert.deepEqual(noWelfare.estimate.notices.map((x) => x.code), ["I_WELFARE_NOT_SHOWN", "I_LABOR_DAY_RATE"]);
+});
+t("1人工あたりの単価: 設計労務単価と比べるときの注意(判断はしない)", () => {
+  const out = G.fromMemo({ site: "s", date: "2026-11-17", memo: "大工 2人工 @28000\n[労務] 手元 1人工 @18000\n[法定福利] 法定福利費相当額 1式 @5000" }, ISSUER, { buyer: "b" });
+  const m = out.estimate.notices.find((x) => x.code === "I_LABOR_DAY_RATE");
+  assert.ok(m.message_ja.includes("大工 28,000円"), m.message_ja);
+  assert.ok(m.message_ja.includes("手元 18,000円"));
+  assert.ok(m.message_ja.includes("必要経費"));
+  assert.ok(!/安い|高い|下回|違反/.test(m.message_ja));                         // 金額の妥当さは言わない
+  const noDay = G.fromMemo({ site: "s", date: "2026-11-17", memo: "[労務] 片付け 1式 @9000\n[法定福利] 法定福利 1式 @1000" }, ISSUER, { buyer: "b" });
+  assert.equal(noDay.estimate.notices.length, 0);                                 // 人工の行がなければ出さない
+  const many = Array.from({ length: 8 }, (_, i) => `職人${i} 1人工 @2000${i}`).join("\n");
+  const big = G.fromMemo({ site: "s", date: "2026-11-17", memo: many + "\n[法定福利] 法定福利 1式 @1000" }, ISSUER, { buyer: "b" });
+  assert.ok(big.estimate.notices[0].message_ja.includes("ほか3行"));             // 長くしすぎない
+});
 console.log(`genba tests ok: ${n}`);
