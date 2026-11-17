@@ -6,8 +6,11 @@
 
 ## Use it
 - [index.html](index.html): open in a browser; no install, no account
+- Installable web app (PWA) when hosted over https: add to the home screen; works offline after the first visit. The service worker caches only the page's own files
 - [README](README.md): memo format. One line per item: `品名 数量単位 @単価` (e.g. `クロス張替え 12.5㎡ @1200`, `解体 1式 3万円`). Lines with `※` or `軽減` use the 8% reduced rate, others 10%
 - Lines whose quantity and unit price cannot be read stay in the daily report only; prices are never invented
+- Optional cost tags `[材料]` `[労務]` `[法定福利]` `[安全]` `[建退共]` (unit `人工` = labour) add a materials/labour/welfare breakdown to the estimate, as Japan's amended Construction Business Act (in force 2025-12-12) asks contractors to try to show. Missing labour or welfare lines give a non-blocking notice; price adequacy is not judged
+- Lines in `人工` (worker-days) list the per-day rate with a note: Japan's public-works design labour rates (公共工事設計労務単価, MLIT, from 2026-03, per 8 hours) exclude employer costs such as social insurance; a separate bracketed reference value includes them. Compare like with like. No rate is judged
 
 ## Limits
 - Saves drafts only in this browser; photos are not stored; no multi-device or team use yet
