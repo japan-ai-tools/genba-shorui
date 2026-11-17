@@ -2,7 +2,7 @@
    通信しない・標準の部品だけ。請求書の検査は jp-invoice-check と同じ決まり(JPInvoice)を使う。MIT・nexus-tools */
 (function (root) {
   "use strict";
-  var VERSION = "0.1.0";
+  var VERSION = "0.3.0";
   var MAX_ITEMS = 300;              // 1つの書類の品目の上限(大きすぎる入力で固まらないため)
   var MAX_YEN = 100000000000;       // 1行の金額の上限 1,000億円(打ち間違いを止める)
   var J = root.JPInvoice || (typeof require === "function" ? require("./jpinvoice_core.js") : null);
@@ -42,9 +42,17 @@
   var UNIT_RE = UNITS.slice().sort(function (a, b) { return b.length - a.length; }).map(function (u) { return u.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }).join("|");
   var LINE_RE = new RegExp("^(.+?)[\\s ]+(\\d[\\d,]*(?:\\.\\d{1,2})?)\\s*(" + UNIT_RE + ")\\s*(?:[@×xX*]|単価)\\s*([\\d,]+(?:万)?)\\s*円?\\s*$");
   var LINE_RE2 = new RegExp("^(.+?)[\\s ]+(\\d[\\d,]*(?:\\.\\d{1,2})?)\\s*(" + UNIT_RE + ")\\s+([\\d,]+(?:万)?)\\s*円\\s*$");
+  // 見積の内訳(改正建設業法 2025-12-12 全面施行: 材料費・労務費・法定福利費などの内訳を明示した見積は努力義務)。
+  // 行の頭か終わりに [材料] [労務] [法定福利] [安全] [建退共] を書くと、その区分で集計する。「人工」は労務費とみなす
+  var CATEGORIES = ["材料費", "労務費", "法定福利費", "安全衛生経費", "建退共掛金", "その他"];
+  var CAT_TAG = {"材料": "材料費", "材料費": "材料費", "材": "材料費", "労務": "労務費", "労務費": "労務費", "法定福利": "法定福利費", "法定福利費": "法定福利費", "福利": "法定福利費",
+    "安全": "安全衛生経費", "安全衛生": "安全衛生経費", "安全衛生経費": "安全衛生経費", "建退共": "建退共掛金", "建退共掛金": "建退共掛金", "その他": "その他", "経費": "その他"};
+  var CAT_RE = /[\[【]\s*(材料費|材料|材|労務費|労務|法定福利費|法定福利|福利|安全衛生経費|安全衛生|安全|建退共掛金|建退共|その他|経費)\s*[\]】]/;
   function parseLine(line) {
     var t = nfkc(line).trim();
     if (!t) return null;
+    var cm = CAT_RE.exec(t), category = cm ? CAT_TAG[cm[1]] : null;
+    if (cm) t = t.replace(CAT_RE, " ").replace(/\s+/g, " ").trim();
     var reduced = /※|軽減/.test(t);
     t = t.replace(/※|\(軽減\)|軽減/g, "").trim();
     var m = LINE_RE.exec(t) || LINE_RE2.exec(t);
@@ -52,7 +60,10 @@
     var qty = parseQty(m[2]), price = parseYen(m[4]);
     if (qty == null || price == null || qty === 0) return {note: nfkc(line).trim()};
     var unit = UNIT_NORMAL[m[3]] || m[3];
-    return {item: {description: m[1].trim(), qty100: qty, unit: unit, unit_price: price, rate: reduced ? 8 : 10, reduced: reduced}};
+    if (!category && unit === "人工") category = "労務費";
+    var it = {description: m[1].trim(), qty100: qty, unit: unit, unit_price: price, rate: reduced ? 8 : 10, reduced: reduced};
+    if (category) it.category = category;
+    return {item: it};
   }
 
   function parseMemo(text) {
@@ -88,7 +99,7 @@
   function makeEstimate(report, opts) {
     opts = opts || {};
     var items = (report.items || []).map(function (it) {
-      var c = {description: it.description, qty100: it.qty100, unit: it.unit, unit_price: it.unit_price, rate: it.rate, reduced: !!it.reduced};
+      var c = {description: it.description, qty100: it.qty100, unit: it.unit, unit_price: it.unit_price, rate: it.rate, reduced: !!it.reduced, category: it.category || "その他"};
       c.amount = lineAmount(c);
       return c;
     });
@@ -96,7 +107,29 @@
     var est = {kind: "estimate", site: report.site, date: opts.date || report.date, buyer: nfkc(opts.buyer).trim(),
       valid_days: opts.valid_days || 30, price_basis: "exclusive", rounding: opts.rounding || "floor", items: items};
     est.totals = totalsByRate(items, est.price_basis, est.rounding);
+    est.breakdown = breakdown(items);
+    est.notices = breakdownNotices(est.breakdown, items);
     return est;
+  }
+
+  // 区分ごとの税抜の合計(書いた区分だけ。0円の区分は出さない)
+  function breakdown(items) {
+    var sums = {};
+    items.forEach(function (it) { var k = it.category || "その他"; sums[k] = (sums[k] || 0) + it.amount; });
+    return CATEGORIES.filter(function (k) { return sums[k] != null; }).map(function (k) { return {category: k, amount: sums[k]}; });
+  }
+  // お知らせ(止めない)。法律の判断はしない。内訳を書くかは使う人が決める
+  function breakdownNotices(bd, items) {
+    var has = {}, out = [];
+    bd.forEach(function (b) { has[b.category] = true; });
+    if (!has["労務費"]) out.push({code: "I_LABOR_NOT_SHOWN", message_ja: "労務費の内訳がありません。改正建設業法(2025-12-12 全面施行)で、材料費・労務費などの内訳を明示した見積は努力義務です。行に [労務] を付けるか、単位を「人工」にすると分けて出します。"});
+    if (has["労務費"] && !has["法定福利費"]) out.push({code: "I_WELFARE_NOT_SHOWN", message_ja: "法定福利費(一人親方は「法定福利費相当額」)の行がありません。見積の内訳に入れる経費の1つです。入れる場合は行に [法定福利] を付けてください。"});
+    var days = (items || []).filter(function (it) { return it.unit === "人工"; });
+    if (days.length) {
+      var shown = days.slice(0, 5).map(function (it) { return it.description + " " + it.unit_price.toLocaleString("ja-JP") + "円"; }).join("、") + (days.length > 5 ? " ほか" + (days.length - 5) + "行" : "");
+      out.push({code: "I_LABOR_DAY_RATE", message_ja: "1人工あたりの単価: " + shown + "。公共工事設計労務単価(国土交通省・令和8年3月から適用・8時間あたり)は、事業主が負担する必要経費(法定福利費の事業主負担分・安全管理費など)を含まない値で、それを加えた参考値は括弧書きで別に示されています。単価を比べるときは、どちらの値と比べているかを確かめてください(このアプリは金額の妥当さを判断しません)。"});
+    }
+    return out;
   }
 
   // 税率ごとに合計してから1回だけ端数処理する(品目ごとに丸めない)
@@ -132,6 +165,6 @@
   }
 
   var api = {VERSION: VERSION, MAX_ITEMS: MAX_ITEMS, parseLine: parseLine, parseMemo: parseMemo, parseQty: parseQty, parseYen: parseYen, qtyText: qtyText,
-    lineAmount: lineAmount, makeReport: makeReport, makeEstimate: makeEstimate, makeInvoice: makeInvoice, totalsByRate: totalsByRate, fromMemo: fromMemo};
+    lineAmount: lineAmount, CATEGORIES: CATEGORIES, breakdown: breakdown, breakdownNotices: breakdownNotices, makeReport: makeReport, makeEstimate: makeEstimate, makeInvoice: makeInvoice, totalsByRate: totalsByRate, fromMemo: fromMemo};
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.Genba = api;
 })(this);
