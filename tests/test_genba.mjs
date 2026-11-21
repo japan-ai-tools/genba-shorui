@@ -126,4 +126,30 @@ t("0.4.0 画面: はじめて開くと見本が入り、1回押すと3つの書�
   assert.equal(el("msg").innerHTML, "");
   assert.ok(el("docs").scrolled);
 });
+
+t("0.5.0 話した文を行に分ける: 1続きの文 → 品目と作業の記録", () => {
+  const m = G.fromSpeech("クロス張り替え12.5平米単価1200円次養生一式8000円次雨で午前は搬入だけ");
+  assert.equal(m, "クロス張り替え 12.5㎡ @1200\n養生 1式 8000円\n雨で午前は搬入だけ");
+  const p = G.parseMemo(m);
+  assert.equal(p.items.length, 2); assert.deepEqual(p.notes, ["雨で午前は搬入だけ"]);
+  assert.equal(p.items[0].qty100, 1250); assert.equal(p.items[1].unit_price, 8000);
+});
+t("0.5.0 話した文: 内訳の札・小数の「点」・人工・かける・軽減", () => {
+  assert.equal(G.fromSpeech("材料、クロス12点5平米単価600円。労務、クロス張り一人工単価25000円"), "[材料] クロス 12.5㎡ @600\n[労務] クロス張り 1人工 @25000");
+  assert.equal(G.fromSpeech("養生2日かける8000"), "養生 2日 × 8000");
+  const tea = G.parseLine(G.fromSpeech("お茶2本単価150円軽減")).item;
+  assert.equal(tea.rate, 8); assert.equal(tea.unit_price, 150);
+  assert.equal(G.parseLine(G.fromSpeech("石膏ボード9.5mm20枚単価850円")).item.description, "石膏ボード9.5mm");
+});
+t("0.5.0 話した文: 名前の漢数字・「次回」・3万円は壊さない", () => {
+  assert.equal(G.fromSpeech("一宮の現場は雨。解体1式3万円"), "一宮の現場は雨\n解体 1式 3万円");
+  assert.equal(G.fromSpeech("次回の打ち合わせは月曜"), "次回の打ち合わせは月曜");
+  assert.equal(G.kanjiToInt("二万五千"), 25000); assert.equal(G.kanjiToInt("千二百"), 1200); assert.equal(G.kanjiToInt("一宮"), null);
+  assert.equal(G.fromSpeech("単価千二百円でクロス"), "@1200でクロス");   // 読めない形は品目にならない(値段を作らない)
+  assert.ok(G.parseLine(G.fromSpeech("単価千二百円でクロス")).note);
+  assert.equal(G.fromSpeech(""), "");
+  assert.throws(() => G.fromSpeech("あ".repeat(20001)), /長すぎ/);
+  const big = G.fromSpeech("クロス1平米単価100円次".repeat(250));   // 大きな入力でも固まらない
+  assert.equal(big.split("\n").length, 250);
+});
 console.log(`genba tests ok: ${n}`);
