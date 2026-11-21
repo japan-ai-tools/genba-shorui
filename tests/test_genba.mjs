@@ -105,4 +105,25 @@ t("1人工あたりの単価: 設計労務単価と比べるときの注意(判�
   const big = G.fromMemo({ site: "s", date: "2026-11-17", memo: many + "\n[法定福利] 法定福利 1式 @1000" }, ISSUER, { buyer: "b" });
   assert.ok(big.estimate.notices[0].message_ja.includes("ほか3行"));             // 長くしすぎない
 });
+t("0.4.0 画面: はじめて開くと見本が入り、1回押すと3つの書類ができる(簡単な偽の画面で動かす)", () => {
+  const fs = require("node:fs"), path = require("node:path"), vm = require("node:vm");
+  const page = fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1")), "..", "index.html"), "utf8");
+  const scripts = [...page.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+  scripts.forEach((s) => new Function(s));                                          // 文法の誤りがない
+  const els = {}, store = {};
+  const el = (id) => els[id] || (els[id] = { id, value: "", innerHTML: "", textContent: "", files: [], h: {},
+    addEventListener(ev, fn) { this.h[ev] = fn; }, appendChild() {}, scrollIntoView() { this.scrolled = true; } });
+  const ctx = { document: { getElementById: el, body: { className: "" }, createElement: () => ({}) },
+    localStorage: { getItem: (k) => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); } },
+    navigator: {}, location: { protocol: "file:" }, confirm: () => { throw new Error("はじめての時は確かめを出さない"); } };
+  ctx.window = ctx; vm.createContext(ctx);
+  scripts.forEach((s) => vm.runInContext(s, ctx));
+  assert.match(el("site").value, /^見本/);                                            // 見本が最初から入る
+  assert.ok(store["genba-shorui:draft:v1"]);
+  el("try-make").h.click();
+  const docs = el("docs").innerHTML;
+  for (const w of ["作業日報", "御見積書", "請求書", "記載事項はそろっています", "data-png='invoice'"]) assert.ok(docs.includes(w), w);
+  assert.equal(el("msg").innerHTML, "");
+  assert.ok(el("docs").scrolled);
+});
 console.log(`genba tests ok: ${n}`);
