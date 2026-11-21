@@ -25,7 +25,7 @@ genba-shorui is a single offline HTML page for small Japanese contractors. It tu
 - 数量と単価が読めた行が見積・請求書の品目になります。読めない行は日報の「作業の記録」に残します(値段を勝手に作りません)
 - `※` か「軽減」を付けた行は軽減税率8%、ほかは10%
 - 小数の数量(12.5㎡)は 2桁まで。金額の円未満は切り捨て
-- 声で入れたいときは、スマホのキーボードのマイクで話してください(このページ自体は音声を扱いません)
+- 声で入れたいときは、スマホのキーボードのマイクで話してください(このページ自体は音声を扱いません)。1続きで話した文は「話した文を行に分ける」で1行ずつにできます(下の 0.5.0)
 
 ## 見積の内訳(材料費・労務費・法定福利費など)
 
@@ -46,6 +46,29 @@ genba-shorui is a single offline HTML page for small Japanese contractors. It tu
 - このページは金額の妥当さ(労務費の基準を著しく下回っていないか)は判断しません。法律の最終の確認は専門家へ
 
 In English: optional cost-category tags (`[材料]` materials, `[労務]` labour, `[法定福利]` statutory welfare costs, `[安全]` safety, `[建退共]` retirement mutual aid) add a breakdown table to the estimate. Japan's amended Construction Business Act (fully in force 2025-12-12) asks contractors to make an effort to show such a breakdown. The page shows a non-blocking notice when labour or welfare lines are missing; it does not judge whether prices are adequate.
+
+## 話すだけで入れる(0.5.0)
+
+手が汚れていて打てない現場向け。スマホのキーボードのマイクで、たとえば次のように話します。
+
+```
+クロス張り替え 12点5平米 単価1200円、次、養生 一式 8000円、次、雨で午前は搬入だけ
+```
+
+「話した文を行に分ける」を押すと、次のメモになります。
+
+```
+クロス張り替え 12.5㎡ @1200
+養生 1式 8000円
+雨で午前は搬入だけ
+```
+
+- 区切り: 「次」「改行」「次の行」「それから」「。」(「次回」「次第」などの言葉は区切らない)
+- 読む言葉: 平米・立米・メートル・単価・かける・「点」(12点5 → 12.5)・単位の直前の漢数字(一式・一人工)。「材料、」「労務、」などで始めると内訳の札になる。最後に「軽減」で軽減税率8%
+- 名前の漢数字(一宮・三菱など)は数字にしません。読めない行は品目にせず「作業の記録」に残します(値段を作りません)。分けたあとの行は必ず目で確かめてください
+- 声を文字にするのはスマホのキーボード(OS)で、このページは音声を扱わず通信もしません。キーボードによっては声が外のサーバーで文字になります。気になる人は手で打ってください
+
+In English: speak one continuous sentence with your phone keyboard's dictation, then tap "話した文を行に分ける" to split it into one line per item ("次" / "改行" / "。" separate lines; 平米, 単価, 一式, 12点5 are understood). The page itself never handles audio and makes no network requests.
 
 ## 開いて10秒で試す・画像で保存(0.4.0)
 
