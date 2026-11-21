@@ -35,6 +35,29 @@ class TestGenba(unittest.TestCase):
         self.assertNotIn("SpeechRecognition", build.build())
 
 
+class TestFirstTen(unittest.TestCase):
+    """0.4.0: 開いて10秒で結果(戦略 0h)。見本が最初から入り、1回で3つの書類・画像で保存"""
+
+    def test_first_visit_has_sample_and_one_button(self):
+        page = build.build()
+        self.assertIn('id="try-make"', page)
+        self.assertIn("if (firstVisit) fillSample();", page)
+        # 見本の名前・番号は架空だと画面に書く
+        self.assertIn("架空", page)
+
+    def test_png_save_is_local(self):
+        page = build.build()
+        for k in ("report", "estimate", "invoice"):
+            self.assertIn(f"data-png='{k}'", page)
+        self.assertIn('toBlob(', page)
+        self.assertIn("URL.createObjectURL", page)
+        self.assertNotIn("toDataURL", page.split("function docToCanvas")[1].split("$(\"docs\").addEventListener")[0])
+
+    def test_try_button_comes_before_inputs(self):
+        page = build.build()
+        self.assertLess(page.index('id="try"'), page.index("1. 今日の現場"))
+
+
 class TestPwa(unittest.TestCase):
     """0.3.0: ホーム画面に入れて電波なしで開けるアプリの形(PWA)。通信しない約束は変えない"""
 
