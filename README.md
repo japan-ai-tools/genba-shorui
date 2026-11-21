@@ -47,6 +47,12 @@ genba-shorui is a single offline HTML page for small Japanese contractors. It tu
 
 In English: optional cost-category tags (`[材料]` materials, `[労務]` labour, `[法定福利]` statutory welfare costs, `[安全]` safety, `[建退共]` retirement mutual aid) add a breakdown table to the estimate. Japan's amended Construction Business Act (fully in force 2025-12-12) asks contractors to make an effort to show such a breakdown. The page shows a non-blocking notice when labour or welfare lines are missing; it does not judge whether prices are adequate.
 
+## 開いて10秒で試す・画像で保存(0.4.0)
+
+はじめて開くと、欄に見本(架空の名前・番号)が入っています。上の「見本で3つの書類を作る」を1回押すと、日報・見積書・請求書ができます。どの書類も「画像で保存」で PNG にできます(画面の文字と表を端末の中で描き直すだけで、どこにも送りません)。自分の現場で使うときは「入力を消す」を押してから書き直してください。
+
+In English: on first open the form is pre-filled with a fictional sample; one tap produces the daily report, estimate and invoice. Each document can be saved as a PNG drawn locally on a canvas (nothing is sent anywhere).
+
 ## スマホのホーム画面に入れる(アプリの形・0.3.0)
 
 公開のページ(https で置いたもの)をスマホで開き、ホーム画面に入れると、アプリのようにアイコンから開けます。一度開いたあとは、電波のない現場でも開けます。
