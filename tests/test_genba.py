@@ -34,6 +34,14 @@ class TestGenba(unittest.TestCase):
         # 声はOSのキーボードの音声入力に任せる(ブラウザの音声認識は外のサーバーに送る場合がある)
         self.assertNotIn("SpeechRecognition", build.build())
 
+    def test_speech_split_button(self):
+        # 0.5.0: 話した文を行に分けるボタン。声を文字にするのはキーボードで、外に送り得ることを画面に書く
+        page = build.build()
+        self.assertIn('id="speech-split"', page)
+        self.assertIn("G.fromSpeech(", page)
+        self.assertIn("このページは音声を扱いません", page)
+        self.assertIn("外のサーバーで文字になります", page)
+
 
 class TestFirstTen(unittest.TestCase):
     """0.4.0: 開いて10秒で結果(戦略 0h)。見本が最初から入り、1回で3つの書類・画像で保存"""
