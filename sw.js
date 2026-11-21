@@ -1,7 +1,7 @@
 // 現場の書類: 電波のない現場でも開けるように、このページの部品だけを端末に残す。
 // 入力・写真は扱わない(ページの中の下書きはブラウザの保存領域だけ)。外のサーバーには何も送らない。
 "use strict";
-var CACHE = "genba-shorui-0.4.0";
+var CACHE = "genba-shorui-0.5.0";
 var FILES = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png"];
 
 self.addEventListener("install", function (e) {
