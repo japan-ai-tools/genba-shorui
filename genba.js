@@ -2,7 +2,7 @@
    通信しない・標準の部品だけ。請求書の検査は jp-invoice-check と同じ決まり(JPInvoice)を使う。MIT・nexus-tools */
 (function (root) {
   "use strict";
-  var VERSION = "0.4.0";
+  var VERSION = "0.5.0";
   var MAX_ITEMS = 300;              // 1つの書類の品目の上限(大きすぎる入力で固まらないため)
   var MAX_YEN = 100000000000;       // 1行の金額の上限 1,000億円(打ち間違いを止める)
   var J = root.JPInvoice || (typeof require === "function" ? require("./jpinvoice_core.js") : null);
@@ -158,6 +158,66 @@
     return {kind: "invoice", site: estimate.site, invoice: inv, check: check, grand_total: total};
   }
 
+
+  // ---- 話した文を行に分ける(0.5.0・戦略 0h「話すだけで日報・見積」) ----
+  // スマホのキーボードの音声入力で話すと「クロス張り替え12.5平米単価1200円次養生一式8000円」のように
+  // 1続きの文になる。それを「1行に1つ」のメモに直す。このページ自体は音声を扱わない(声は OS のキーボードが文字にする)。
+  // 読めない所は書き換えず、そのまま「作業の記録」に残る(値段を作らない)。
+  var KNUM = {"〇": 0, "零": 0, "一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9};
+  function kanjiToInt(k) {
+    var total = 0, sect = 0, cur = 0, seen = false;
+    for (var i = 0; i < k.length; i++) {
+      var c = k[i];
+      if (c in KNUM) { cur = cur * 10 + KNUM[c]; seen = true; }
+      else if (c === "十" || c === "百" || c === "千") { sect += (cur || 1) * (c === "十" ? 10 : c === "百" ? 100 : 1000); cur = 0; seen = true; }
+      else if (c === "万") { total += (sect + cur || 1) * 10000; sect = 0; cur = 0; seen = true; }
+      else return null;
+    }
+    return seen ? total + sect + cur : null;
+  }
+  var SPOKEN_UNITS = [["平米", "㎡"], ["平方メートル", "㎡"], ["立米", "㎥"], ["立方メートル", "㎥"], ["メーター", "m"], ["メートル", "m"], ["にんく", "人工"], ["ニンク", "人工"]];
+  // 区切り: 「。」・改行・「改行」「次の行」「それから」「それと」、「次」「つぎ」は「次回」「次第」などの言葉の頭では区切らない
+  var SEP_RE = /[。\n]|(?:改行|次の行|それから|それと)(?:は|に)?[、\s]*|(?:次|つぎ)(?![回第期週月年号の日])(?:は|に)?[、\s]*/;
+  var SPOKEN_TAG_RE = /^(材料費?|労務費?|法定福利費?|安全衛生経費|安全衛生|安全|建退共掛金|建退共)(?:で|は)?[、,\s]+/;
+  function speechLine(seg) {
+    var t = seg.replace(/[、,]\s*/g, " ").replace(/\s+/g, " ").trim().replace(/(です|でした|になります)$/, "").trim();
+    if (!t) return "";
+    var reduced = /(※|軽減(税率)?)$/.test(t);
+    if (reduced) t = t.replace(/\s*(※|軽減(税率)?)$/, "");
+    var tag = "", m = SPOKEN_TAG_RE.exec(t);
+    if (m) { tag = "[" + m[1] + "] "; t = t.slice(m[0].length); }
+    SPOKEN_UNITS.forEach(function (u) { t = t.split(u[0]).join(u[1]); });
+    // 漢数字は、単位か「円」の直前・「単価」の直後だけ数字に直す(一宮・三菱などの名前は触らない)
+    var unitAlt = UNIT_RE + "|円";
+    t = t.replace(new RegExp("(?<![\\d〇零一二三四五六七八九十百千万])([〇零一二三四五六七八九十百千万]+)(?=\\s*(?:" + unitAlt + "))", "g"), function (a, k) { var v = kanjiToInt(k); return v == null ? a : String(v); });
+    t = t.replace(/(単価|@)\s*([〇零一二三四五六七八九十百千万]+)/g, function (a, w, k) { var v = kanjiToInt(k); return v == null ? a : w + v; });
+    t = t.replace(/(\d+)\s*点\s*(\d{1,2})(?!\d)/g, "$1.$2");             // 12点5 → 12.5
+    t = t.replace(/\s*(?:かける|掛ける|カケル)\s*(?=\d)/g, " × ");
+    t = t.replace(/\s*単価\s*/g, " @");
+    t = t.replace(/@\s*([\d,]+万?)\s*円/g, "@$1");
+    // 品名と数量の間に空白を入れる(「クロス張り替え12.5㎡ @1200」→「クロス張り替え 12.5㎡ @1200」)
+    var re = new RegExp("^(.*?\\D)\\s*(\\d[\\d,]*(?:\\.\\d{1,2})?\\s*(?:" + UNIT_RE + ")\\s*(?:(?:[@×xX*])\\s*[\\d,]+万?\\s*円?|\\s+[\\d,]+万?\\s*円|[\\d,]+万?\\s*円))$");
+    var q = re.exec(t);
+    if (q) {
+      var rest = q[2].replace(new RegExp("^(\\d[\\d,]*(?:\\.\\d{1,2})?\\s*(?:" + UNIT_RE + "))\\s*(?=[\\d])"), "$1 ");
+      t = q[1].trim() + " " + rest;
+    }
+    return tag + t.replace(/\s+/g, " ").trim() + (reduced ? " ※" : "");
+  }
+  function fromSpeech(text) {
+    var s = nfkc(text);
+    if (s.length > 20000) throw err("話した文が長すぎます(2万文字まで)。分けて入れてください。");
+    // 区切りの言葉で行に分ける。区切りの言葉そのものは残さない
+    var out = [], rest = s;
+    while (rest.length) {
+      var m = SEP_RE.exec(rest);
+      if (!m) { out.push(rest); break; }
+      out.push(rest.slice(0, m.index));
+      rest = rest.slice(m.index + m[0].length);
+    }
+    return out.map(speechLine).filter(Boolean).join("\n");
+  }
+
   // メモ1つから3つの書類をまとめて作る(画面とテストの入口)
   function fromMemo(input, issuer, opts) {
     var r = makeReport(input), e = makeEstimate(r, opts), i = makeInvoice(e, issuer, opts);
@@ -165,6 +225,6 @@
   }
 
   var api = {VERSION: VERSION, MAX_ITEMS: MAX_ITEMS, parseLine: parseLine, parseMemo: parseMemo, parseQty: parseQty, parseYen: parseYen, qtyText: qtyText,
-    lineAmount: lineAmount, CATEGORIES: CATEGORIES, breakdown: breakdown, breakdownNotices: breakdownNotices, makeReport: makeReport, makeEstimate: makeEstimate, makeInvoice: makeInvoice, totalsByRate: totalsByRate, fromMemo: fromMemo};
+    lineAmount: lineAmount, CATEGORIES: CATEGORIES, breakdown: breakdown, breakdownNotices: breakdownNotices, makeReport: makeReport, makeEstimate: makeEstimate, makeInvoice: makeInvoice, totalsByRate: totalsByRate, fromMemo: fromMemo, fromSpeech: fromSpeech, kanjiToInt: kanjiToInt};
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.Genba = api;
 })(this);
