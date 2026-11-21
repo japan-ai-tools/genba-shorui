@@ -2,7 +2,7 @@
    通信しない・標準の部品だけ。請求書の検査は jp-invoice-check と同じ決まり(JPInvoice)を使う。MIT・nexus-tools */
 (function (root) {
   "use strict";
-  var VERSION = "0.3.0";
+  var VERSION = "0.4.0";
   var MAX_ITEMS = 300;              // 1つの書類の品目の上限(大きすぎる入力で固まらないため)
   var MAX_YEN = 100000000000;       // 1行の金額の上限 1,000億円(打ち間違いを止める)
   var J = root.JPInvoice || (typeof require === "function" ? require("./jpinvoice_core.js") : null);
