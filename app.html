@@ -43,7 +43,8 @@ table{border-collapse:collapse;width:100%;margin:6px 0}th,td{border:1px solid va
 <div class="row"><label>現場名 <input id="site" placeholder="例: 山田様邸 2階"></label><label>日付 <input id="date" type="date"></label><label>天気 <input id="weather" placeholder="例: 晴れ"></label></div>
 <label>作業した人(1行に1人・名前と時間) <textarea id="workers" style="min-height:4em" placeholder="田中 8&#10;佐藤 7.5"></textarea></label>
 <label>メモ(1行に1つ。品目は「品名 数量単位 @単価」。頭に [材料] [労務] [法定福利] [安全] [建退共] を付けると見積の内訳に分けます) <textarea id="memo" placeholder="[材料] クロス 12.5㎡ @600&#10;[労務] クロス張り 1人工 @25000&#10;[法定福利] 法定福利費相当額 1式 @3800&#10;解体 1式 3万円&#10;雨で午後は室内作業"></textarea></label>
-<p class="small">声で入れたいときは、スマホのキーボードのマイクで話すとこの欄に文字が入ります。数量と単価が読めない行は品目にせず、日報の「作業の記録」に残します(値段を勝手に作りません)。</p>
+<p><button class="sub" id="speech-split">話した文を行に分ける</button></p>
+<p class="small" id="speech-note">話すだけで入れるとき: スマホのキーボードのマイクを押して、たとえば「クロス張り替え 12点5平米 単価1200円、次、養生 一式 8000円、次、雨で午前は搬入だけ」と話し、このボタンを押すと1行ずつに分けます(「次」「改行」「。」で区切り、「平米」「単価」「一式」などを読みます)。声を文字にするのはスマホのキーボードで、このページは音声を扱いません(キーボードによっては声が外のサーバーで文字になります。気になる人は手で打ってください)。分けたあとの行は必ず目で確かめてください。数量と単価が読めない行は品目にせず、日報の「作業の記録」に残します(値段を勝手に作りません)。</p>
 <label>写真(端末の中で表示するだけ・保存はしません) <input id="photos" type="file" accept="image/*" multiple></label>
 <div id="thumbs" class="photos"></div>
 
@@ -147,6 +148,18 @@ table{border-collapse:collapse;width:100%;margin:6px 0}th,td{border:1px solid va
     }
   }
   $("make").addEventListener("click", make);
+  // 0.5.0: 話した文(1続き)を「1行に1つ」に分ける。読めた品目の数を知らせる
+  $("speech-split").addEventListener("click", function () {
+    var m = $("msg");
+    try {
+      var before = $("memo").value;
+      if (!before.trim()) { m.innerHTML = "<div class='box warn'>メモの欄が空です。キーボードのマイクで話してから押してください。</div>"; return; }
+      var after = G.fromSpeech(before);
+      $("memo").value = after; save();
+      var p = G.parseMemo(after);
+      m.innerHTML = "<div class='box'>" + after.split("\n").length + "行に分けました(品目として読めた行 " + p.items.length + "・作業の記録 " + p.notes.length + ")。内容を確かめてから「3つの書類を作る」を押してください。</div>";
+    } catch (e) { m.innerHTML = "<div class='box warn'>" + esc(e.ja ? e.message : "分けられませんでした。") + "</div>"; }
+  });
 
   // 書類を画像(PNG)にする。画面の書類の文字と表を、この端末の中の canvas に描き直すだけ(外に送らない)
   function docToCanvas(el) {
