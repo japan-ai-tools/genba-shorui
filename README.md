@@ -8,7 +8,7 @@
 - 印刷・PDFはブラウザの印刷から(書類ごとに1枚ずつ)
 
 ## In English (summary for AI agents and search)
-genba-shorui is a single offline HTML page for small Japanese contractors. It turns a short site memo into a daily work report, an estimate and a Japanese qualified invoice without retyping, and checks the six required invoice items and per-tax-rate rounding (8% / 10%) before printing. Nothing leaves the device. It does not suggest market prices. Not tax advice. A machine-readable summary is in `llms.txt`.
+genba-shorui is a single offline HTML page for small Japanese contractors. It turns a short site memo into a daily work report, an estimate and a Japanese qualified invoice without retyping, and checks the six required invoice items and per-tax-rate rounding (8% / 10%) before printing. Nothing leaves the device. It does not suggest market prices. Not tax advice. Since 0.6.0 it also keeps company settings (address, bank details, logo, seal image) on the device, fills your own Excel .xlsx template that contains placeholders such as `{{現場名}}` and `{{品名}}` (formatting kept, item rows repeated), and prints text only onto a pre-printed paper form laid out over a photo. A machine-readable summary is in `llms.txt`.
 
 ## メモの書き方
 
@@ -70,6 +70,57 @@ In English: optional cost-category tags (`[材料]` materials, `[労務]` labour
 
 In English: speak one continuous sentence with your phone keyboard's dictation, then tap "話した文を行に分ける" to split it into one line per item ("次" / "改行" / "。" separate lines; 平米, 単価, 一式, 12点5 are understood). The page itself never handles audio and makes no network requests.
 
+## 自社の設定(0.6.0)
+
+画面の下の「自社の設定」に、住所・電話・振込先・書類の下に入れる一言・ロゴ・印影(はんこの画像)・書類の色・品目の表の列の順を入れると、日報・見積書・請求書に毎回入ります。屋号・名前と登録番号は「2. 請求先と自分」の欄のものを一緒に保存します。
+
+- 保存はこの端末のブラウザの中だけです。保存できない設定のブラウザでも、開いている間は使えます
+- 「設定を書き出す(JSON)」で1つのファイルにでき、別の端末で「設定を読み込む」と同じ設定になります(紙の用紙の配置も入ります。用紙の写真と Excel のひな形は入りません)。振込先などが入るので、渡す相手に気をつけてください
+- 画像はこの端末の中で小さくしてから保存します(ロゴは長い辺 600px・印影は 300px まで)。印影は背景が白か透明の画像がきれいに重なります
+- 品目の表の列は順番を変えられます。数量・単価は外せます。品名・金額・税率は請求書に要るので外せません
+
+## 自分の Excel のひな形に入れる(0.6.0)
+
+いつも使っている Excel の請求書・見積書・日報に、値を入れて新しい .xlsx を作れます。罫線・結合・フォント・列の幅・印刷の設定はそのまま残ります。ひな形のファイルはこの端末の中だけで扱い、どこにも送りません。
+
+1. 「ひな形の見本.xlsx を保存」で見本をもらうか、自分の Excel を開きます
+2. 値を入れたいセルに、次の「差し込み」を書きます(セルの文の中に混ぜても使えます。例: `現場: {{現場名}}`)
+3. 品目の表は、1行目のセルに品目の差し込みを書きます。品目の数だけ下へ行を増やし、下の合計の行などは下へずらします(数式の範囲・結合・印刷範囲・条件付き書式も合わせます)
+4. .xlsx(Excel ブック)で保存し、「.xlsx を選ぶ」で選んで「ひな形に入れて保存」を押します
+
+| 差し込み | 入るもの |
+|---|---|
+| `{{書類名}}` | 請求書・御見積書・作業日報 |
+| `{{現場名}}` `{{日付}}` `{{天気}}` | 今日の現場(日付は「2026年11月16日」の形) |
+| `{{お客様}}` | 請求先(「様」が無ければ付けます) |
+| `{{自分の名前}}` `{{登録番号}}` `{{住所}}` `{{電話}}` `{{振込先}}` `{{備考}}` | 自社の設定(振込先は請求書の時だけ・備考は書類の下の一言) |
+| `{{合計}}` | 税抜の合計 |
+| `{{10%対象}}` `{{消費税10%}}` `{{8%対象}}` `{{消費税8%}}` | 税率ごとの合計と消費税(税率ごとに1回だけ端数処理) |
+| `{{請求金額}}` | 税込の合計 |
+| `{{軽減の注記}}` `{{作業した人}}` `{{作業の記録}}` `{{有効期限}}` | 注記・日報の内容・見積の有効期限 |
+| 品目の行: `{{No}}` `{{品名}}` `{{数量}}` `{{単位}}` `{{単価}}` `{{金額}}` `{{税率}}` `{{区分}}` | 品目1つにつき1行 |
+
+- 差し込みがセル全体で値が数(金額・数量)のときは、数のセルとして入ります。ひな形のセルの表示形式(¥・桁区切り)がそのまま使え、Excel の数式でも計算できます。数式は開いた時に計算し直されます
+- 「作る書類」を請求書にすると、ひな形に適格請求書の記載事項6つ(発行する人の名前と登録番号・取引の日・取引の内容・税率ごとの合計と税率・税率ごとの消費税額・お客様の名前)の差し込みがあるかを確かめ、足りないものを画面で知らせます(止めません。見積・日報の時は確かめません)。入力の中身はこれまでどおり請求書の検査にかけます
+- 行を安全に増やせないひな形(Excel の「テーブル」・ピボットテーブル・グラフ・コメントがあるシート、品目の行が共有の数式)では、行を増やさずにひな形にある行の数だけ入れ、入らなかった件数を知らせます。品目の行の下に同じ形の空の行を足しておくと、そこへ入れます(空の行が足りていれば行は増やしません)
+- 使えないもの: 古い .xls・マクロ付き(.xlsm)・パスワード付き・20MB を超えるファイル。古いブラウザ(DecompressionStream が無いもの)では開けません
+- 最後に選んだひな形(1.5MB まで)は、この端末のブラウザに覚えておきます
+
+## 紙の用紙(手書き用の伝票)に印字する(0.6.0)
+
+市販や印刷屋さんの複写の伝票など、紙の用紙に文字だけを印刷します。
+
+1. 用紙を真上から撮り、用紙の四隅で切った写真(かスキャン)を「写真を選ぶ」で選びます
+2. 用紙の大きさ(A4 か B5)と、書類の種類を選びます
+3. 「入れる欄」を選んで「欄を置く」を押し、写真の上の入れたい位置まで指で動かします(矢印で 1mm ずつも動かせます)。品目の欄は「品目の行の間隔」ずつ下へ、「品目の行数」まで入ります
+4. 「ずれを測る印刷」を白い紙に印刷し、十字の位置を定規で測って、ずれた分を「ずれの補正」に入れます
+5. 用紙をプリンターに入れて「用紙に印字する」。印刷の設定は「倍率 100%(実際のサイズ)」「余白なし」にしてください
+
+- 写真は画面で位置を合わせるためだけで、印刷されず、保存もしません(次に開いた時は選び直してください)
+- 欄の配置(mm)はこの端末と、設定の書き出し(JSON)に残ります
+- 請求書の用紙のときは、置いた欄に記載事項6つがそろっているかを知らせます(用紙にもとから印刷されている項目は、このアプリには分かりません)
+- 横向きの用紙・A4/B5 以外の大きさにはまだ対応していません。プリンターによっては用紙の端まで印刷できません
+
 ## 開いて10秒で試す・画像で保存(0.4.0)
 
 はじめて開くと、欄に見本(架空の名前・番号)が入っています。上の「見本で3つの書類を作る」を1回押すと、日報・見積書・請求書ができます。どの書類も「画像で保存」で PNG にできます(画面の文字と表を端末の中で描き直すだけで、どこにも送りません)。自分の現場で使うときは「入力を消す」を押してから書き直してください。
@@ -91,7 +142,8 @@ In English: hosted over https, the page is an installable web app (PWA). Add it 
 
 - 保存はこの端末のブラウザの中だけ(下書き)。写真は保存しません。端末をまたぐ保存・複数の人で使うことはできません(月額版で準備中)
 - 単価の相場・目安は出しません。値段は書いた単価だけで計算します
-- 写真から文字や数量を読むことはしません
+- 写真から文字や数量を読むことはしません(紙の用紙の写真も、位置合わせに表示するだけです)
+- Excel のひな形は、このアプリの差し込みの名前だけを入れます。Excel の関数で書いた独自の計算は Excel が開いた時に計算します。行を増やせないひな形の形は上に書いたとおりです
 
 ## 確かめていないこと
 
@@ -102,8 +154,8 @@ In English: hosted over https, the page is an installable web app (PWA). Add it 
 ## 開発
 
 ```
-python build.py               # app.html + genba.js + jpinvoice_core.js → index.html
-node tests/test_genba.mjs     # 正しい例・壊れた入力・大きな入力
+python build.py               # app.html + genba.js + jpinvoice_core.js + xlsx_fill.js → index.html
+node tests/test_genba.mjs     # 正しい例・壊れた入力・大きな入力・Excel のひな形の往復(Node 18 以降)
 python -m unittest discover -s tests
 ```
 
