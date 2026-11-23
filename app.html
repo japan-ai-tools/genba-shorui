@@ -19,12 +19,41 @@ label{display:block;margin:.4em 0}input,textarea,select{font:inherit;width:100%;
 textarea{min-height:9em}.row{display:flex;gap:8px;flex-wrap:wrap}.row>label{flex:1 1 200px}
 button{font:inherit;padding:8px 16px;border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:4px;cursor:pointer;margin:4px 4px 4px 0}
 button.sub{background:transparent;color:var(--accent)}
-.box{background:var(--soft);padding:10px 12px;border-radius:6px;margin:10px 0}.small{font-size:.85rem}
+.box{background:var(--soft);padding:10px 12px;border-radius:6px;margin:10px 0}.small{font-size:.85rem;overflow-wrap:anywhere}
 table{border-collapse:collapse;width:100%;margin:6px 0}th,td{border:1px solid var(--line);padding:4px 6px;text-align:left}td.n{text-align:right;white-space:nowrap}
 .ng{background:var(--ng)}.ok{background:var(--ok)}.warn{background:var(--warn)}
 .doc{border:1px solid var(--line);padding:12px;border-radius:6px;margin:12px 0}
 .photos img{max-width:160px;max-height:120px;margin:4px;border:1px solid var(--line)}
-@media print{.noprint{display:none!important}body.p-report .doc:not(#d-report),body.p-estimate .doc:not(#d-estimate),body.p-invoice .doc:not(#d-invoice){display:none}.doc{border:none}}
+details.panel{border:1px solid var(--line);border-radius:6px;margin:12px 0;padding:0 12px}
+details.panel>summary{cursor:pointer;font-weight:bold;padding:10px 0;font-size:1.05rem}
+details.panel[open]>summary{border-bottom:1px solid var(--line);margin-bottom:8px}
+.imgpick{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:.4em 0}.imgpick img{max-height:56px;max-width:140px;border:1px solid var(--line);background:#fff}
+label.filebtn{display:inline-block;width:auto;padding:8px 16px;border:1px solid var(--accent);color:var(--accent);border-radius:4px;cursor:pointer;margin:4px 4px 4px 0;position:relative}
+label.filebtn:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.vh{position:absolute!important;width:1px!important;height:1px!important;opacity:0;overflow:hidden;padding:0!important;border:0!important}
+button:disabled{opacity:.35;cursor:default}
+.filename{font-size:.85rem;color:#7a8595;overflow-wrap:anywhere}
+input[type=color]{width:64px;height:40px;padding:2px}
+ul.cols{list-style:none;padding:0;margin:4px 0}ul.cols li{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:4px;padding:2px 6px;margin:3px 0;max-width:360px}
+ul.cols li span{flex:1}ul.cols input{width:auto}ul.cols button{margin:2px 0;padding:4px 10px}
+.chips span{display:inline-block;padding:1px 8px;border-radius:12px;background:var(--soft);border:1px solid var(--line);margin:2px;font-size:.85rem}.chips span.miss{background:var(--warn)}
+.dochead{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:6px}
+.dochead .logo{max-height:56px;max-width:40%}.dochead .me{text-align:right;position:relative;margin-left:auto;padding-right:4px}
+.dochead .me.has-seal{padding-right:62px}.nw{white-space:nowrap}@media (max-width:480px){.dochead .me{font-size:.85rem}.dochead .logo{max-height:44px;max-width:28%}}.dochead .seal{position:absolute;right:0;top:-2px;width:58px;height:58px;object-fit:contain;opacity:.9}
+.doc{--accent-doc:var(--accent)}.doc h2{border-bottom-color:var(--accent-doc)}.doc th{background:color-mix(in srgb,var(--accent-doc) 12%,transparent)}
+.row3{display:flex;gap:8px;flex-wrap:wrap}.row3>label{flex:1 1 90px;display:flex;flex-direction:column;justify-content:flex-end}
+#paper-stage{position:relative;width:100%;max-width:520px;aspect-ratio:210/297;background:#fff;border:1px solid var(--line);overflow:hidden;user-select:none;-webkit-user-select:none;margin:8px 0}
+#paper-stage>img{position:absolute;inset:0;width:100%;height:100%;object-fit:fill;opacity:.8;pointer-events:none}
+#paper-stage .empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#7a8595;font-size:.9rem;padding:20px;text-align:center}
+.pf{position:absolute;white-space:nowrap;color:#b00020;line-height:1.1;cursor:grab;touch-action:none;padding:1px 2px;border:1px dashed #b00020;background:rgba(255,255,255,.7);font-family:system-ui,sans-serif}
+.pf.r{transform:translateX(-100%)}.pf.sel{outline:2px solid #1f5fa8;background:rgba(220,235,255,.9)}
+.pf small{display:block;color:#7a8595;font-size:.75em}
+#paper-sel{min-height:2.2em}
+#paper-print{display:none}
+@media print{.noprint,details.panel{display:none!important}body.p-report .doc:not(#d-report),body.p-estimate .doc:not(#d-estimate),body.p-invoice .doc:not(#d-invoice){display:none}.doc{border:none}
+body.p-paper{padding:0;margin:0;max-width:none;background:#fff}body.p-paper>*:not(#paper-print){display:none!important}
+body.p-paper #paper-print{display:block;position:relative;overflow:hidden;color:#000}#paper-print span{position:absolute;white-space:nowrap;line-height:1;font-family:'Hiragino Mincho ProN','Yu Mincho','MS Mincho',serif}
+#paper-print span.r{transform:translateX(-100%)}#paper-print i{position:absolute;border:0 solid #000}}
 </style>
 </head>
 <body>
@@ -57,6 +86,53 @@ table{border-collapse:collapse;width:100%;margin:6px 0}th,td{border:1px solid va
 
 <div id="docs"></div>
 
+<details class="panel noprint" id="settings-box">
+<summary>自社の設定(住所・電話・振込先・ロゴ・印影・色)</summary>
+<p class="small">一度入れると3つの書類に毎回入ります。屋号・名前と登録番号は「2. 請求先と自分」の欄のものを使い、ここに一緒に保存します。保存はこの端末のブラウザの中だけです(どこにも送りません)。別の端末へ移すときは「設定を書き出す」でできたファイルを、移す先で「設定を読み込む」で選んでください。</p>
+<label>住所 <input id="set-address" placeholder="例: 岡山県○○市○○町1-2-3"></label>
+<label>電話 <input id="set-phone" inputmode="tel" placeholder="例: 090-0000-0000"></label>
+<label>振込先(請求書に入ります) <textarea id="set-bank" style="min-height:3em" placeholder="例: ○○銀行 ○○支店 普通 1234567 タナカ タロウ"></textarea></label>
+<label>書類の下に入れる一言 <textarea id="set-footer" style="min-height:3em" placeholder="例: いつもありがとうございます。お支払いは月末締め翌月末払いでお願いします。"></textarea></label>
+<div class="imgpick"><span>ロゴ</span><img id="set-logo-view" alt="ロゴ" hidden><label class="filebtn">画像を選ぶ<input id="set-logo" class="vh" type="file" accept="image/*"></label><button class="sub" id="set-logo-clear" type="button">消す</button></div>
+<div class="imgpick"><span>印影</span><img id="set-seal-view" alt="印影" hidden><label class="filebtn">画像を選ぶ<input id="set-seal" class="vh" type="file" accept="image/*"></label><button class="sub" id="set-seal-clear" type="button">消す</button></div>
+<p class="small">印影は背景が白か透明の画像がきれいに重なります。画像はこの端末の中で小さくしてから保存します。</p>
+<label style="display:flex;align-items:center;gap:10px">書類の色 <input id="set-accent" type="color" value="#1f5fa8"></label>
+<p style="margin-bottom:0">見積書・請求書の品目の表の列(順番を変えられます。品名・金額・税率は外せません)</p>
+<ul class="cols" id="set-cols"></ul>
+<p><button class="sub" id="set-export" type="button">設定を書き出す(JSON)</button> <label class="filebtn">設定を読み込む<input id="set-import" class="vh" type="file" accept="application/json,.json"></label></p>
+<div id="set-msg"></div>
+</details>
+
+<details class="panel noprint" id="xlsx-box">
+<summary>自分の Excel のひな形に入れる(.xlsx)</summary>
+<p class="small">いつも使っている Excel の書類の、値を入れたいセルに <code>{{現場名}}</code> <code>{{日付}}</code> <code>{{お客様}}</code> <code>{{請求金額}}</code> のような「差し込み」を書いて .xlsx で保存し、ここで選びます。罫線・結合・フォント・列の幅はそのままで、値だけが入った新しい .xlsx ができます。ひな形のファイルはこの端末の中だけで扱います。</p>
+<p class="small">品目の表は、1行目のセルに <code>{{品名}}</code> <code>{{数量}}</code> <code>{{単位}}</code> <code>{{単価}}</code> <code>{{金額}}</code> <code>{{税率}}</code> を書きます。品目の数だけ下へ行を増やします(下の合計などは下へずれます)。</p>
+<p><button class="sub" id="tpl-sample-dl" type="button">ひな形の見本.xlsx を保存</button> <button class="sub" id="tpl-sample-use" type="button">見本をひな形にして試す</button></p>
+<p style="margin:.4em 0">ひな形のファイル(.xlsx)<br><label class="filebtn">.xlsx を選ぶ<input id="tpl-file" class="vh" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label></p>
+<label>作る書類 <select id="tpl-kind"><option value="invoice">請求書</option><option value="estimate">御見積書</option><option value="report">作業日報</option></select></label>
+<div id="tpl-info" class="small">まだひな形を選んでいません。</div>
+<p><button id="tpl-fill" type="button">ひな形に入れて保存(.xlsx)</button></p>
+<div id="tpl-msg"></div>
+<p class="small">使える差し込み: 書類名・現場名・日付・天気・お客様・自分の名前・登録番号・住所・電話・振込先・備考・合計(税抜)・10%対象・消費税10%・8%対象・消費税8%・請求金額(税込)・軽減の注記・作業した人・作業の記録・有効期限/品目の行: No・品名・数量・単位・単価・金額・税率・区分。金額は数のセルとして入るので、ひな形の表示形式(¥・桁区切り)がそのまま使えます。</p>
+</details>
+
+<details class="panel noprint" id="paper-box">
+<summary>紙の用紙(手書き用の伝票)に印字する</summary>
+<p class="small">お手持ちの紙の用紙を真上から撮った写真かスキャンを選び、入れたい欄の名前を写真の上の位置まで指で動かします。印刷すると、決めた位置に文字だけが出ます(写真は画面で位置を合わせるためだけで、印刷されません・保存もしません)。用紙をプリンターに入れて印刷してください。</p>
+<div class="row3"><label>用紙 <select id="paper-size"><option value="A4">A4(210×297mm)</option><option value="B5">B5(182×257mm)</option></select></label><label>書類 <select id="paper-kind"><option value="invoice">請求書</option><option value="estimate">御見積書</option><option value="report">作業日報</option></select></label></div>
+<p style="margin:.4em 0">用紙の写真・スキャン(四隅を用紙の端に合わせて切ったもの)<br><label class="filebtn">写真を選ぶ<input id="paper-img" class="vh" type="file" accept="image/*"></label> <span class="filename" id="paper-img-name"></span></p>
+<div class="row"><label style="flex:2 1 160px">入れる欄 <select id="paper-key"></select></label><label style="flex:1 1 90px;align-self:flex-end"><button id="paper-add" type="button" style="width:100%">欄を置く</button></label></div>
+<div id="paper-stage"><div class="empty" id="paper-empty">ここに用紙の写真が出ます。「欄を置く」で置いた欄は指で動かせます。</div></div>
+<div id="paper-sel" class="small">欄をさわると選べます。選んだ欄は矢印で 1mm ずつ動かせます。</div>
+<p id="paper-nudge"><button class="sub" data-nudge="-1,0" type="button">←</button><button class="sub" data-nudge="0,-1" type="button">↑</button><button class="sub" data-nudge="0,1" type="button">↓</button><button class="sub" data-nudge="1,0" type="button">→</button> <button class="sub" id="paper-del" type="button">この欄を外す</button></p>
+<div class="row3"><label>文字の大きさ(pt) <input id="paper-font" type="number" step="0.5" min="6" max="28" value="10.5"></label><label>品目の行の間隔(mm) <input id="paper-pitch" type="number" step="0.5" min="3" max="40" value="7"></label><label>品目の行数 <input id="paper-rows" type="number" min="1" max="60" value="10"></label></div>
+<p style="margin-bottom:0"><b>ずれの補正</b>(プリンターで印字がずれる分。右・下へずれたら負の数)</p>
+<div class="row3"><label>左右(mm) <input id="paper-dx" type="number" step="0.5" min="-30" max="30" value="0"></label><label>上下(mm) <input id="paper-dy" type="number" step="0.5" min="-30" max="30" value="0"></label></div>
+<p><button id="paper-print-btn" type="button">用紙に印字する</button> <button class="sub" id="paper-test" type="button">ずれを測る印刷</button> <button class="sub" id="paper-reset" type="button">配置を全部消す</button></p>
+<p class="small">「ずれを測る印刷」は、白い紙の左上から 20mm・20mm の所などに十字を印刷します。定規で測って、ずれた分を上の補正に入れてください。印刷の設定は「倍率 100%(実際のサイズ)」「余白なし」にしてください。配置は、この端末と設定の書き出し(JSON)に残ります。</p>
+<div id="paper-msg"></div>
+</details>
+
 <p class="small noprint" id="install-note">スマホのホーム画面に入れると、アプリのように開けて、電波のない現場でも使えます(Android の Chrome は「ホーム画面に追加」/iPhone の Safari は共有ボタン →「ホーム画面に追加」)。入れても入力はこの端末の中だけです。</p>
 
 <p class="small noprint">確かめていないこと: 登録番号がいま有効か(国税庁の公表サイトで確認してください)・適格簡易請求書などの特例・工事の契約書の決まり。税の判断の最終の確認は税理士か所轄の税務署へ。請求書の検査は jp-invoice-check と同じ決まりです(国税庁「適格請求書等保存方式の概要」https://www.nta.go.jp/publication/pamph/shohi/shohizei_11.pdf)。月額版(複数の端末で使う・単価の目安)は準備中です。</p>
@@ -68,9 +144,17 @@ table{border-collapse:collapse;width:100%;margin:6px 0}th,td{border:1px solid va
 /*GENBA*/
 </script>
 <script>
+/*XLSX*/
+</script>
+<script>
 (function () {
   "use strict";
-  var G = window.Genba, J = window.JPInvoice, KEY = "genba-shorui:draft:v1", photos = [];
+  var G = window.Genba, J = window.JPInvoice, X = window.XlsxFill, KEY = "genba-shorui:draft:v1", photos = [];
+  // 0.6.0: 自社の設定・Excel のひな形・紙の用紙の配置。保存はこの端末のブラウザの中だけ(保存できない端末でも動く)
+  var SKEY = "genba-shorui:settings:v1", PKEY = "genba-shorui:paper:v1", TKEY = "genba-shorui:template:v1";
+  var settings = G.defaultSettings(), paper = G.defaultPaper(), tpl = null, lastOut = null, paperImg = "", paperSel = -1;
+  function readStore(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function writeStore(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); return true; } catch (e) { return false; } }
   var $ = function (id) { return document.getElementById(id); };
   var F = ["site", "date", "weather", "workers", "memo", "buyer", "rounding", "issuer", "regno"];
   $("ver").textContent = G.VERSION;
@@ -100,6 +184,34 @@ table{border-collapse:collapse;width:100%;margin:6px 0}th,td{border:1px solid va
       return {name: m[1], hours: m[2]};
     });
   }
+  function regnoText() { return String($("regno").value || "").normalize("NFKC").replace(/[\s\-‐−ー―]/g, "").toUpperCase(); }
+  // 書類の頭: ロゴ・屋号・住所・電話・登録番号・印影(自社の設定から)
+  function docHead(kind) {
+    var name = String($("issuer").value || "").trim(), reg = regnoText(), lines = [];
+    lines.push("<div><b>" + esc(name || (kind === "invoice" ? "(屋号・名前なし)" : "")) + "</b></div>");
+    if (settings.address) lines.push("<div>" + esc(settings.address) + "</div>");
+    if (settings.phone) lines.push("<div>電話 " + esc(settings.phone) + "</div>");
+    if (kind === "invoice") lines.push("<div>登録番号 <span class='nw'>" + esc(reg || "(なし)") + "</span></div>");
+    else if (kind === "estimate" && reg) lines.push("<div>登録番号 <span class='nw'>" + esc(reg) + "</span></div>");
+    if (!name && kind !== "invoice" && !settings.logo && !settings.seal && lines.length === 1) return "";
+    return "<div class='dochead'>" + (settings.logo ? "<img class='logo' src='" + settings.logo + "' alt='ロゴ'>" : "<span></span>") +
+      "<div class='me" + (settings.seal ? " has-seal" : "") + "'>" + lines.join("") + (settings.seal ? "<img class='seal' src='" + settings.seal + "' alt='印影'>" : "") + "</div></div>";
+  }
+  function docFoot() { return settings.footer ? "<p class='small foot'>" + esc(settings.footer) + "</p>" : ""; }
+  // 見積書・請求書の品目の表(列の順は自社の設定で決める)
+  var COL_HEAD = {"品名": "品目", "数量": "数量", "単価": "単価", "金額": "金額(税抜)", "税率": "税率"};
+  function itemTable(items) {
+    var cols = settings.columns;
+    return "<table><tr>" + cols.map(function (k) { return "<th>" + COL_HEAD[k] + "</th>"; }).join("") + "</tr>" + items.map(function (it) {
+      return "<tr>" + cols.map(function (k) {
+        if (k === "品名") return "<td>" + esc(it.description) + (it.reduced ? " ※" : "") + "</td>";
+        if (k === "数量") return "<td class='n'>" + esc(G.qtyText(it.qty100)) + esc(it.unit) + "</td>";
+        if (k === "単価") return "<td class='n'>" + yen(it.unit_price) + "</td>";
+        if (k === "金額") return "<td class='n'>" + yen(it.amount) + "</td>";
+        return "<td class='n'>" + it.rate + "%</td>";
+      }).join("") + "</tr>";
+    }).join("") + "</table>";
+  }
   function itemRows(items, money) {
     return items.map(function (it) {
       return "<tr><td>" + esc(it.description) + (it.reduced ? " ※" : "") + "</td><td class='n'>" + esc(G.qtyText(it.qty100)) + esc(it.unit) + "</td>" +
@@ -110,24 +222,28 @@ table{border-collapse:collapse;width:100%;margin:6px 0}th,td{border:1px solid va
     return totals.map(function (t) { return "<tr><td>" + t.rate + "%対象</td><td class='n'>" + yen(t.amount) + "</td><td>消費税 " + t.rate + "%</td><td class='n'>" + yen(t.tax) + "</td></tr>"; }).join("");
   }
   function render(out) {
-    var r = out.report, e = out.estimate, iv = out.invoice, inv = iv.invoice, c = iv.check, h = [];
-    h.push("<div class='doc' id='d-report'><h2>作業日報</h2><p>" + esc(r.date) + " / 現場: " + esc(r.site) + (r.weather ? " / 天気: " + esc(r.weather) : "") + "</p>");
+    var r = out.report, e = out.estimate, iv = out.invoice, inv = iv.invoice, c = iv.check, h = [], ac = " style='--accent-doc:" + settings.accent + "'";
+    h.push("<div class='doc' id='d-report'" + ac + "><h2>作業日報</h2>" + docHead("report") + "<p>" + esc(r.date) + " / 現場: " + esc(r.site) + (r.weather ? " / 天気: " + esc(r.weather) : "") + "</p>");
     if (r.workers.length) h.push("<table><tr><th>作業した人</th><th>時間</th></tr>" + r.workers.map(function (w) { return "<tr><td>" + esc(w.name) + "</td><td class='n'>" + esc(G.qtyText(w.hours100)) + "時間</td></tr>"; }).join("") + "</table>");
     h.push("<p><b>作業の記録</b></p><ul>" + (r.notes.length ? r.notes.map(function (n) { return "<li>" + esc(n) + "</li>"; }).join("") : "<li>(なし)</li>") + "</ul>");
     if (r.items.length) h.push("<p><b>今日の作業の量</b></p><table><tr><th>品目</th><th>数量</th></tr>" + itemRows(r.items, false) + "</table>");
     if (photos.length) h.push("<div class='photos'>" + photos.map(function (p) { return "<img src='" + p.url + "' alt='" + esc(p.name) + "'>"; }).join("") + "</div>");
+    h.push(docFoot());
     h.push("<p class='noprint'><button class='sub' data-print='report'>日報を印刷・PDF</button> <button class='sub' data-png='report'>日報を画像で保存</button></p></div>");
 
-    h.push("<div class='doc' id='d-estimate'><h2>御見積書</h2><p>" + esc(honor(e.buyer)) + " / " + esc(e.date) + " / 現場: " + esc(e.site) + " / 有効期限: 発行から" + e.valid_days + "日</p>");
-    h.push("<table><tr><th>品目</th><th>数量</th><th>単価</th><th>金額</th><th>税率</th></tr>" + itemRows(e.items, true) + "</table><table>" + totalsRows(e.totals) + "</table>");
+    h.push("<div class='doc' id='d-estimate'" + ac + "><h2>御見積書</h2>" + docHead("estimate") + "<p>" + esc(honor(e.buyer)) + " / " + esc(e.date) + " / 現場: " + esc(e.site) + " / 有効期限: 発行から" + e.valid_days + "日</p>");
+    h.push(itemTable(e.items) + "<table>" + totalsRows(e.totals) + "</table>");
     if (e.breakdown.length > 1 || (e.breakdown[0] && e.breakdown[0].category !== "その他")) h.push("<p><b>内訳(税抜)</b></p><table>" + e.breakdown.map(function (b) { return "<tr><td>" + esc(b.category) + "</td><td class='n'>" + yen(b.amount) + "</td></tr>"; }).join("") + "</table>");
     h.push("<p><b>御見積金額(税込) " + yen(iv.grand_total) + "</b></p><p class='small'>※は軽減税率(8%)の対象。消費税は税率ごとの合計に1回だけ端数処理しています。</p>");
     if (e.notices.length) h.push("<div class='box noprint warn'><b>見積の内訳のお知らせ(止めません)</b><ul>" + e.notices.map(function (m) { return "<li><code>" + esc(m.code) + "</code> " + esc(m.message_ja) + "</li>"; }).join("") + "</ul></div>");
+    h.push(docFoot());
     h.push("<p class='noprint'><button class='sub' data-print='estimate'>見積を印刷・PDF</button> <button class='sub' data-png='estimate'>見積を画像で保存</button></p></div>");
 
-    h.push("<div class='doc' id='d-invoice'><h2>請求書</h2><p>" + esc(honor(inv.buyer.name)) + " / 取引日 " + esc(inv.date) + "</p><p>" + esc(inv.issuer.name || "(屋号・名前なし)") + " 登録番号 " + esc(inv.issuer.registration_number || "(なし)") + "</p>");
-    h.push("<table><tr><th>内容</th><th>金額(税抜)</th><th>税率</th></tr>" + inv.items.map(function (it) { return "<tr><td>" + esc(it.description) + (it.reduced ? " ※" : "") + "</td><td class='n'>" + yen(it.amount) + "</td><td class='n'>" + it.rate + "%</td></tr>"; }).join("") + "</table><table>" + totalsRows(inv.totals) + "</table>");
+    h.push("<div class='doc' id='d-invoice'" + ac + "><h2>請求書</h2>" + docHead("invoice") + "<p>" + esc(honor(inv.buyer.name)) + " / 取引日 " + esc(inv.date) + "</p>");
+    h.push(itemTable(e.items) + "<table>" + totalsRows(inv.totals) + "</table>");
     h.push("<p><b>ご請求金額(税込) " + yen(iv.grand_total) + "</b></p><p class='small'>※は軽減税率対象</p>");
+    if (settings.bank) h.push("<p>お振込先: " + esc(settings.bank) + "</p>");
+    h.push(docFoot());
     var cls = c.ok ? (c.warnings.length ? "warn" : "ok") : "ng";
     h.push("<div class='box noprint " + cls + "'><b>適格請求書の検査: " + (c.ok ? "記載事項はそろっています" : "直すところがあります") + "</b><ul>" +
       c.errors.concat(c.warnings).map(function (m) { return "<li><code>" + esc(m.code) + "</code> " + esc(m.message_ja) + "</li>"; }).join("") + "</ul></div>");
@@ -139,9 +255,11 @@ table{border-collapse:collapse;width:100%;margin:6px 0}th,td{border:1px solid va
     try {
       var out = G.fromMemo({site: $("site").value, date: $("date").value, weather: $("weather").value, memo: $("memo").value, workers: workers(), photos: photos.map(function (p) { return p.name; })},
         {name: $("issuer").value, registration_number: $("regno").value}, {buyer: $("buyer").value, rounding: $("rounding").value});
+      lastOut = out;
       render(out);
       return true;
     } catch (e) {
+      lastOut = null;
       $("docs").innerHTML = "";
       $("msg").innerHTML = "<div class='box ng'>" + esc(e.message) + "</div>";
       return false;
@@ -176,6 +294,17 @@ table{border-collapse:collapse;width:100%;margin:6px 0}th,td{border:1px solid va
     function text(s, sz, b) { wrap(s, W - 2 * PAD, sz, b).forEach(function (l) { ops.push({k: "t", s: l, x: PAD, y: y, sz: sz, b: b, al: "left"}); y += Math.round(sz * 1.6); }); }
     Array.prototype.forEach.call(el.children, function (c) {
       if (c.classList.contains("noprint")) return;
+      if (c.classList.contains("dochead")) {
+        var top = y, lh = 0, ty = y, logo = c.querySelector("img.logo"), seal = c.querySelector("img.seal");
+        if (logo && logo.naturalWidth) { var ls = Math.min(300 / logo.naturalWidth, 96 / logo.naturalHeight); ops.push({k: "i", im: logo, x: PAD, y: top, w: logo.naturalWidth * ls, h: logo.naturalHeight * ls}); lh = logo.naturalHeight * ls; }
+        var hasSeal = !!(seal && seal.naturalWidth), tx = W - PAD - (hasSeal ? 100 : 0);   // 印影は文字の右に置き、文字を隠さない
+        Array.prototype.forEach.call(c.querySelectorAll(".me>div"), function (d) {
+          wrap(d.textContent, W / 2, 20, !!d.querySelector("b")).forEach(function (l) { ops.push({k: "t", s: l, x: tx, y: ty, sz: 20, b: !!d.querySelector("b"), al: "right"}); ty += 30; });
+        });
+        if (hasSeal) { var ss = 90 / Math.max(seal.naturalWidth, seal.naturalHeight); ops.push({k: "i", im: seal, x: W - PAD - 90, y: top - 4, w: seal.naturalWidth * ss, h: seal.naturalHeight * ss}); }
+        y = Math.max(top + lh, ty) + 12;
+        return;
+      }
       if (c.tagName === "H2") { text(c.textContent, 34, true); ops.push({k: "l", y: y - 8}); y += 10; }
       else if (c.tagName === "P") { text(c.textContent, c.classList.contains("small") ? 18 : 22, !!c.querySelector("b")); y += 4; }
       else if (c.tagName === "UL") { Array.prototype.forEach.call(c.children, function (li) { text("・" + li.textContent, 22, false); }); y += 4; }
@@ -210,7 +339,7 @@ table{border-collapse:collapse;width:100%;margin:6px 0}th,td{border:1px solid va
     cx.fillStyle = "#fff"; cx.fillRect(0, 0, W, cv.height); cx.textBaseline = "top"; cx.lineWidth = 1;
     ops.forEach(function (o) {
       if (o.k === "t") { setF(o.sz, o.b); cx.fillStyle = "#1d2430"; cx.textAlign = o.al; cx.fillText(o.s, o.x, o.y); }
-      else if (o.k === "l") { cx.strokeStyle = "#1f5fa8"; cx.lineWidth = 3; cx.beginPath(); cx.moveTo(PAD, o.y); cx.lineTo(W - PAD, o.y); cx.stroke(); cx.lineWidth = 1; }
+      else if (o.k === "l") { cx.strokeStyle = settings.accent || "#1f5fa8"; cx.lineWidth = 3; cx.beginPath(); cx.moveTo(PAD, o.y); cx.lineTo(W - PAD, o.y); cx.stroke(); cx.lineWidth = 1; }
       else if (o.k === "r") { if (o.fill) { cx.fillStyle = "#f1f5fa"; cx.fillRect(o.x, o.y, o.w, o.h); } cx.strokeStyle = "#c9d1dc"; cx.strokeRect(o.x + 0.5, o.y + 0.5, o.w, o.h); }
       else if (o.k === "i") { cx.drawImage(o.im, o.x, o.y, o.w, o.h); }
     });
@@ -248,9 +377,335 @@ table{border-collapse:collapse;width:100%;margin:6px 0}th,td{border:1px solid va
     fillSample();
     if (make()) $("docs").scrollIntoView({behavior: "smooth", block: "start"});
   });
-  $("clear").addEventListener("click", function () { F.forEach(function (k) { if (k !== "rounding" && k !== "date") $(k).value = ""; }); $("docs").innerHTML = ""; save(); });
+  $("clear").addEventListener("click", function () {
+    F.forEach(function (k) { if (k !== "rounding" && k !== "date") $(k).value = ""; });
+    $("issuer").value = settings.name; $("regno").value = settings.regno;   // 自社の設定の屋号・登録番号は残す
+    $("docs").innerHTML = ""; lastOut = null; save();
+  });
+  // ======== 0.6.0 自社の設定 ========
+  function box(cls, html) { return "<div class='box " + cls + "'>" + html + "</div>"; }
+  function download(blob, name) {
+    var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+  }
+  var SF = {address: "set-address", phone: "set-phone", bank: "set-bank", footer: "set-footer", accent: "set-accent"};
+  function showSettings() {
+    Object.keys(SF).forEach(function (k) { $(SF[k]).value = settings[k]; });
+    [["logo", "set-logo-view"], ["seal", "set-seal-view"]].forEach(function (p) { var v = $(p[1]); v.hidden = !settings[p[0]]; if (settings[p[0]]) v.src = settings[p[0]]; else v.removeAttribute && v.removeAttribute("src"); });
+    showCols();
+  }
+  function saveSettings(quiet) {
+    Object.keys(SF).forEach(function (k) { settings[k] = $(SF[k]).value; });
+    settings.name = String($("issuer").value || "").trim(); settings.regno = regnoText();
+    settings = G.normalizeSettings(settings);
+    var ok = writeStore(SKEY, JSON.stringify(settings));
+    if (!ok && !quiet) $("set-msg").innerHTML = box("warn", "この端末では設定を保存できませんでした(画像が大きすぎるか、保存が止められています)。いま開いている間は使えます。「設定を書き出す」でファイルに残せます。");
+    else if (!quiet) $("set-msg").innerHTML = "";
+    if (lastOut) render(lastOut);
+    return ok;
+  }
+  function loadSettings() {
+    try { var raw = JSON.parse(readStore(SKEY) || "null"); if (raw) settings = G.normalizeSettings(raw); } catch (e) { /* 読めない時は初めの値 */ }
+    if (!readStore(SKEY)) {   // 軽い版(0.6.0 初版)で保存した会社の書式を引き継ぐ
+      try { var oldCo = JSON.parse(readStore("genba-shorui:company:v1") || "null"); if (oldCo) { settings = G.migrateCompany(oldCo); writeStore(SKEY, JSON.stringify(settings)); } } catch (e) { /* 引き継げなくても動く */ }
+    }
+    var iss = String($("issuer").value || "").trim();
+    if (!settings.name && iss && !/^見本/.test(iss)) { settings.name = iss; settings.regno = regnoText(); }   // 0.5.0 の下書きから引き継ぐ
+    if (!firstVisit && !iss && settings.name) { $("issuer").value = settings.name; $("regno").value = settings.regno; }
+    showSettings();
+  }
+  function showCols() {
+    var list = settings.columns.concat(G.COLUMNS.filter(function (c) { return settings.columns.indexOf(c) < 0; }));
+    $("set-cols").innerHTML = list.map(function (c, i) {
+      var on = settings.columns.indexOf(c) >= 0, req = G.COLUMNS_REQUIRED.indexOf(c) >= 0;
+      return "<li><input type='checkbox' data-col='" + c + "'" + (on ? " checked" : "") + (req ? " disabled" : "") + " aria-label='" + c + "を出す'><span>" + c + (req ? "" : "(外せます)") + "</span>" +
+        "<button class='sub' type='button' data-up='" + i + "' aria-label='" + c + "を上へ'" + (i ? "" : " disabled") + ">↑</button><button class='sub' type='button' data-down='" + i + "' aria-label='" + c + "を下へ'" + (i < list.length - 1 ? "" : " disabled") + ">↓</button></li>";
+    }).join("");
+  }
+  function colsFromList(order) {
+    var on = {};
+    Array.prototype.forEach.call(document.querySelectorAll("#set-cols input[data-col]"), function (b) { on[b.getAttribute("data-col")] = b.checked || b.disabled; });
+    settings.columns = order.filter(function (c) { return on[c]; });
+    saveSettings(); showCols();
+  }
+  $("set-cols").addEventListener("click", function (ev) {
+    var t = ev.target, order = Array.prototype.map.call(document.querySelectorAll("#set-cols input[data-col]"), function (b) { return b.getAttribute("data-col"); });
+    var up = t.getAttribute && t.getAttribute("data-up"), dn = t.getAttribute && t.getAttribute("data-down");
+    if (up != null || dn != null) {
+      var i = +(up != null ? up : dn), j = up != null ? i - 1 : i + 1;
+      if (j < 0 || j >= order.length) return;
+      var x = order[i]; order[i] = order[j]; order[j] = x;
+      colsFromList(order);
+    } else if (t.getAttribute && t.getAttribute("data-col")) colsFromList(order);
+  });
+  Object.keys(SF).forEach(function (k) { $(SF[k]).addEventListener(k === "accent" ? "input" : "change", function () { saveSettings(); }); });
+  ["issuer", "regno"].forEach(function (k) { $(k).addEventListener("change", function () { saveSettings(true); }); });
+  // 画像はこの端末の中で小さくしてから持つ(印影は透明を残すため PNG)
+  function readImage(file, maxSide, cb) {
+    if (!file || !/^image\//.test(file.type || "")) { cb(new Error("画像のファイルを選んでください。")); return; }
+    if (file.size > 20 * 1024 * 1024) { cb(new Error("画像が大きすぎます(20MB まで)。")); return; }
+    var r = new FileReader();
+    r.onerror = function () { cb(new Error("画像を読めませんでした。")); };
+    r.onload = function () {
+      var im = new Image();
+      im.onerror = function () { cb(new Error("この画像の形式は読めませんでした(PNG・JPEG をお使いください)。")); };
+      im.onload = function () {
+        var sc = Math.min(1, maxSide / Math.max(im.naturalWidth, im.naturalHeight)), cv = document.createElement("canvas");
+        cv.width = Math.max(1, Math.round(im.naturalWidth * sc)); cv.height = Math.max(1, Math.round(im.naturalHeight * sc));
+        cv.getContext("2d").drawImage(im, 0, 0, cv.width, cv.height);
+        var url = cv.toDataURL("image/png");
+        if (url.length > 1400000) url = cv.toDataURL("image/jpeg", 0.85);
+        cb(null, url, cv.width, cv.height);
+      };
+      im.src = r.result;
+    };
+    r.readAsDataURL(file);
+  }
+  [["logo", "set-logo", 600], ["seal", "set-seal", 300]].forEach(function (p) {
+    $(p[1]).addEventListener("change", function () {
+      var f = this.files && this.files[0], inp = this;
+      readImage(f, p[2], function (e, url) {
+        inp.value = "";
+        if (e) { $("set-msg").innerHTML = box("ng", esc(e.message)); return; }
+        settings[p[0]] = url; saveSettings(); showSettings();
+      });
+    });
+    $(p[1] + "-clear").addEventListener("click", function () { settings[p[0]] = ""; saveSettings(); showSettings(); });
+  });
+  $("set-export").addEventListener("click", function () {
+    saveSettings(true);
+    var json = G.exportSettings(settings, paper);
+    download(new Blob([json], {type: "application/json"}), "現場の書類_設定_" + new Date().toISOString().slice(0, 10) + ".json");
+    $("set-msg").innerHTML = box("ok", "設定を書き出しました(屋号・登録番号・住所・電話・振込先・ロゴ・印影・色・列の順・紙の用紙の配置)。用紙の写真とひな形の Excel は入りません。このファイルには振込先などが入るので、渡す相手に気をつけてください。");
+  });
+  $("set-import").addEventListener("change", function () {
+    var f = this.files && this.files[0], inp = this;
+    if (!f) return;
+    var r = new FileReader();
+    r.onload = function () {
+      inp.value = "";
+      try {
+        var got = G.importSettings(String(r.result));
+        settings = got.settings;
+        if (settings.name) $("issuer").value = settings.name;
+        if (settings.regno) $("regno").value = settings.regno;
+        save(); showSettings(); saveSettings(true);
+        if (got.paper) { paper = got.paper; savePaper(); showPaper(); }
+        $("set-msg").innerHTML = box(got.notes.length ? "warn" : "ok", "設定を読み込みました。" + got.notes.map(esc).join(""));
+      } catch (e) { $("set-msg").innerHTML = box("ng", esc(e.ja ? e.message : "設定のファイルを読めませんでした。")); }
+    };
+    r.onerror = function () { $("set-msg").innerHTML = box("ng", "ファイルを読めませんでした。"); };
+    r.readAsText(f, "utf-8");
+  });
+
+  // ======== 0.6.0 自分の Excel のひな形 ========
+  var XMIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  function currentRates() {
+    try {
+      var items = lastOut ? lastOut.estimate.items : G.parseMemo($("memo").value).items, seen = {};
+      items.forEach(function (it) { seen[it.rate] = true; });
+      var rs = Object.keys(seen).map(Number).sort(function (a, b) { return b - a; });
+      return rs.length ? rs : [10];
+    } catch (e) { return [10]; }
+  }
+  function tplMissing() { return $("tpl-kind").value === "invoice" && tpl ? X.invoiceMissing(tpl.scan.names, currentRates()) : []; }
+  function showTemplate() {
+    if (!tpl) { $("tpl-info").innerHTML = "まだひな形を選んでいません。"; return; }
+    var known = {}, sc = tpl.scan, h = [];
+    X.FIELD_KEYS.concat(X.ITEM_KEYS).forEach(function (k) { known[k] = true; });
+    h.push("<p>選んでいるひな形: <b>" + esc(tpl.name) + "</b>(シート " + sc.sheets.length + ")</p>");
+    if (!sc.names.length) h.push(box("warn", "差し込み({{現場名}} など)が見つかりませんでした。値を入れたいセルに {{現場名}} のように書いて保存し直してください。"));
+    else h.push("<div class='chips'>見つかった差し込み: " + sc.names.map(function (n) { return "<span" + (known[n] ? "" : " class='miss'") + ">{{" + esc(n) + "}}" + (known[n] ? "" : "(このアプリは知らない名前)") + "</span>"; }).join("") + "</div>");
+    if (sc.names.length && !sc.hasItemRow) h.push("<p>品目の行({{品名}} など)はありません。品目は入りません。</p>");
+    var miss = tplMissing();
+    if (miss.length) h.push(box("warn", "<b>請求書として使う時のお知らせ</b><br>" + esc(X.invoiceMissingText(miss))));
+    else if ($("tpl-kind").value === "invoice" && sc.names.length) h.push(box("ok", "適格請求書の記載事項6つの差し込みはそろっています。"));
+    $("tpl-info").innerHTML = h.join("");
+  }
+  function setTemplate(name, bytes, remember) {
+    $("tpl-msg").innerHTML = "";
+    return X.scan(bytes).then(function (sc) {
+      tpl = {name: name, bytes: bytes, scan: sc};
+      if (remember) writeStore(TKEY, bytes.length <= 1500000 ? JSON.stringify({name: name, b64: X.toBase64(bytes)}) : null);
+      showTemplate();
+    }).catch(function (e) { tpl = null; showTemplate(); $("tpl-msg").innerHTML = box("ng", esc(e && e.ja ? e.message : "ひな形を読めませんでした。.xlsx で保存し直してください。")); });
+  }
+  $("tpl-file").addEventListener("change", function () {
+    var f = this.files && this.files[0];
+    if (!f) return;
+    if (f.size > X.MAX_ZIP) { $("tpl-msg").innerHTML = box("ng", "ひな形のファイルが大きすぎます(20MB まで)。"); return; }
+    var r = new FileReader();
+    r.onload = function () { setTemplate(f.name, new Uint8Array(r.result), true); };
+    r.onerror = function () { $("tpl-msg").innerHTML = box("ng", "ファイルを読めませんでした。"); };
+    r.readAsArrayBuffer(f);
+  });
+  $("tpl-kind").addEventListener("change", showTemplate);
+  $("tpl-sample-dl").addEventListener("click", function () {
+    X.buildSample().then(function (b) { download(new Blob([b], {type: XMIME}), "ひな形の見本.xlsx"); })
+      .catch(function () { $("tpl-msg").innerHTML = box("ng", "このブラウザでは見本を作れませんでした。"); });
+  });
+  $("tpl-sample-use").addEventListener("click", function () {
+    X.buildSample().then(function (b) { return setTemplate("ひな形の見本.xlsx", b, false); });
+  });
+  $("tpl-fill").addEventListener("click", function () {
+    var m = $("tpl-msg");
+    if (!tpl) { m.innerHTML = box("warn", "先にひな形のファイル(.xlsx)を選んでください。見本で試すときは「見本をひな形にして試す」を押してください。"); return; }
+    if (!make()) { m.innerHTML = box("ng", "上の入力に直すところがあります(赤い枠を見てください)。"); return; }
+    var kind = $("tpl-kind").value, data = G.docData(lastOut, settings, kind), chk = lastOut.invoice.check;
+    m.innerHTML = box("", "作っています…");
+    X.fill(tpl.bytes, data).then(function (res) {
+      var name = G.KIND_TITLE[kind] + "_" + (lastOut.report.date || "") + ".xlsx", h = [];
+      download(new Blob([res.bytes], {type: XMIME}), name);
+      h.push(box("ok", "「" + esc(name) + "」を保存しました。Excel で開くと合計などの数式は計算し直されます。" + res.itemRows.map(function (r) { return r.inserted ? "(シート「" + esc(r.sheet) + "」は品目の行を " + r.inserted + " 行足しました)" : ""; }).join("")));
+      if (kind === "invoice") {
+        var miss = X.invoiceMissing(tpl.scan.names, data.rates);
+        if (miss.length) h.push(box("warn", "<b>請求書のお知らせ</b><br>" + esc(X.invoiceMissingText(miss))));
+        if (!chk.ok) h.push(box("ng", "<b>適格請求書の検査: 直すところがあります</b><ul>" + chk.errors.map(function (x) { return "<li>" + esc(x.message_ja) + "</li>"; }).join("") + "</ul>"));
+      }
+      if (res.warnings.length) h.push(box("warn", "<ul>" + res.warnings.map(function (w) { return "<li>" + esc(w.message_ja) + "</li>"; }).join("") + "</ul>"));
+      m.innerHTML = h.join("");
+    }).catch(function (e) { m.innerHTML = box("ng", esc(e && e.ja ? e.message : "ひな形に入れられませんでした。")); });
+  });
+  function loadTemplate() {
+    try {
+      var t = JSON.parse(readStore(TKEY) || "null");
+      if (t && t.b64 && X) setTemplate(t.name || "ひな形.xlsx", X.fromBase64(t.b64), false);
+    } catch (e) { /* 覚えていない時は選び直す */ }
+  }
+
+  // ======== 0.6.0 紙の用紙に印字 ========
+  function savePaper() { paper = G.normalizePaper(paper); writeStore(PKEY, G.serializePaper(paper)); }
+  function loadPaper() { try { var raw = readStore(PKEY); if (raw) paper = G.normalizePaper(raw); } catch (e) { /* 初めの値 */ } showPaper(); }
+  var PI = {"paper-size": "paper", "paper-kind": "kind", "paper-font": "font", "paper-pitch": "pitch", "paper-rows": "rows", "paper-dx": "dx", "paper-dy": "dy"};
+  function showPaper() {
+    Object.keys(PI).forEach(function (id) { $(id).value = paper[PI[id]]; });
+    $("paper-key").innerHTML = G.PAPER_FIELD_KEYS.map(function (k) { return "<option>" + esc(k) + "</option>"; }).join("");
+    drawStage();
+  }
+  function stageMm(px, rect, sz) { return {x: px.x / rect.width * sz.w, y: px.y / rect.height * sz.h}; }
+  function drawStage() {
+    var st = $("paper-stage"), sz = G.PAPERS[paper.paper];
+    if (!st.style) return;
+    st.style.aspectRatio = sz.w + " / " + sz.h;
+    var w = st.clientWidth || 360, pxPerMm = w / sz.w, data = lastOut ? G.docData(lastOut, settings, paper.kind) : null, h = [];
+    if (paperImg) h.push("<img src='" + paperImg + "' alt=''>");
+    else h.push("<div class='empty'>ここに用紙の写真が出ます。「欄を置く」で置いた欄は指で動かせます。</div>");
+    paper.fields.forEach(function (f, i) {
+      var item = G.PAPER_ITEM_KEYS.indexOf(f.key) >= 0, right = /^(数量|単価|金額|合計|10%対象|消費税10%|8%対象|消費税8%|請求金額)$/.test(f.key);
+      var v = data ? (item ? (data.items[0] ? data.items[0][f.key] : "") : data.fields[f.key]) : "";
+      var txt = (v === "" || v == null) ? "{{" + f.key + "}}" : (typeof v === "number" ? v.toLocaleString("ja-JP") : String(v));
+      var fs = Math.max(8, (f.size || paper.font) * 0.3528 * pxPerMm);
+      h.push("<div class='pf" + (right ? " r" : "") + (i === paperSel ? " sel" : "") + "' data-i='" + i + "' style='left:" + (f.x / sz.w * 100) + "%;top:" + (f.y / sz.h * 100) + "%;font-size:" + fs.toFixed(1) + "px'>" + esc(txt.length > 24 ? txt.slice(0, 24) + "…" : txt) + (item ? "<small>↓" + paper.rows + "行・" + paper.pitch + "mmおき</small>" : "") + "</div>");
+    });
+    st.innerHTML = h.join("");
+    var f = paper.fields[paperSel];
+    $("paper-sel").textContent = f ? "選んでいる欄: " + f.key + "(左から " + f.x + "mm・上から " + f.y + "mm)" : "欄をさわると選べます。選んだ欄は矢印で 1mm ずつ動かせます。";
+  }
+  Object.keys(PI).forEach(function (id) {
+    $(id).addEventListener("change", function () { paper[PI[id]] = PI[id] === "paper" || PI[id] === "kind" ? this.value : Number(this.value); savePaper(); showPaper(); });
+  });
+  $("paper-img").addEventListener("change", function () {
+    var f = this.files && this.files[0];
+    readImage(f, 1600, function (e, url, w, h) {
+      if (e) { $("paper-msg").innerHTML = box("ng", esc(e.message)); return; }
+      paperImg = url; $("paper-img-name").textContent = f.name;
+      // 写真の縦横の比から A4・B5 の向きの違いを知らせる(用紙の大きさは自分で選ぶ)
+      var ratio = h / w, sz = G.PAPERS[paper.paper], want = sz.h / sz.w;
+      $("paper-msg").innerHTML = Math.abs(ratio - want) > 0.12 ? box("warn", "写真の縦横の比が用紙(" + esc(sz.label) + ")と少し違います。写真を用紙の四隅で切ると位置が合いやすくなります。横向きの用紙には対応していません。") : "";
+      drawStage();
+    });
+  });
+  $("paper-add").addEventListener("click", function () {
+    var key = $("paper-key").value, sz = G.PAPERS[paper.paper], n = paper.fields.length;
+    if (n >= 80) { $("paper-msg").innerHTML = box("warn", "欄は80個までです。"); return; }
+    paper.fields.push({key: key, x: Math.round(sz.w * 0.3 + (n % 5) * 6), y: Math.round(sz.h * 0.2 + (n % 10) * 8)});
+    paperSel = paper.fields.length - 1; savePaper(); drawStage();
+  });
+  $("paper-del").addEventListener("click", function () { if (paperSel < 0) return; paper.fields.splice(paperSel, 1); paperSel = -1; savePaper(); drawStage(); });
+  $("paper-reset").addEventListener("click", function () {
+    if (paper.fields.length && !window.confirm("置いた欄を全部消します。よろしいですか?")) return;
+    paper.fields = []; paperSel = -1; savePaper(); drawStage();
+  });
+  $("paper-nudge").addEventListener("click", function (ev) {
+    var d = ev.target.getAttribute && ev.target.getAttribute("data-nudge"), f = paper.fields[paperSel];
+    if (!d || !f) return;
+    var p = d.split(","), sz = G.PAPERS[paper.paper];
+    f.x = Math.min(sz.w, Math.max(0, f.x + +p[0])); f.y = Math.min(sz.h, Math.max(0, f.y + +p[1]));
+    savePaper(); drawStage();
+  });
+  // 指・マウスで欄を動かす(位置は mm で持つ)
+  var drag = null;
+  $("paper-stage").addEventListener("pointerdown", function (ev) {
+    var t = ev.target.closest ? ev.target.closest(".pf") : null;
+    if (!t) { paperSel = -1; drawStage(); return; }
+    var i = +t.getAttribute("data-i"), f = paper.fields[i], rect = this.getBoundingClientRect(), sz = G.PAPERS[paper.paper];
+    paperSel = i;
+    drag = {i: i, sx: ev.clientX, sy: ev.clientY, fx: f.x, fy: f.y, k: sz.w / rect.width, el: t, moved: false};
+    t.classList.add("sel");
+    if (t.setPointerCapture) try { t.setPointerCapture(ev.pointerId); } catch (e) { /* なし */ }
+    ev.preventDefault();
+  });
+  $("paper-stage").addEventListener("pointermove", function (ev) {
+    if (!drag) return;
+    var f = paper.fields[drag.i], sz = G.PAPERS[paper.paper];
+    f.x = Math.round(Math.min(sz.w, Math.max(0, drag.fx + (ev.clientX - drag.sx) * drag.k)) * 2) / 2;
+    f.y = Math.round(Math.min(sz.h, Math.max(0, drag.fy + (ev.clientY - drag.sy) * drag.k)) * 2) / 2;
+    drag.el.style.left = (f.x / sz.w * 100) + "%"; drag.el.style.top = (f.y / sz.h * 100) + "%"; drag.moved = true;
+    ev.preventDefault();
+  });
+  function endDrag() { if (!drag) return; drag = null; savePaper(); drawStage(); }
+  $("paper-stage").addEventListener("pointerup", endDrag);
+  $("paper-stage").addEventListener("pointercancel", endDrag);
+  function printPaper(texts, sz, marks) {
+    var pp = $("paper-print"), st = document.createElement("style");
+    st.id = "paper-page"; st.textContent = "@page{size:" + sz.w + "mm " + sz.h + "mm;margin:0}";
+    document.head.appendChild(st);
+    pp.style.width = sz.w + "mm"; pp.style.height = sz.h + "mm";
+    pp.innerHTML = (marks || "") + texts.map(function (t) {
+      return "<span" + (t.align === "right" ? " class='r'" : "") + " style='left:" + t.x + "mm;top:" + t.y + "mm;font-size:" + t.size + "pt'>" + esc(t.text) + "</span>";
+    }).join("");
+    document.body.className = "p-paper";
+    var done = false, clean = function () { if (done) return; done = true; document.body.className = ""; pp.innerHTML = ""; if (st.parentNode) st.parentNode.removeChild(st); };
+    window.addEventListener("afterprint", clean, {once: true});
+    window.print();
+    setTimeout(clean, 1500);
+  }
+  $("paper-print-btn").addEventListener("click", function () {
+    var m = $("paper-msg");
+    if (!paper.fields.length) { m.innerHTML = box("warn", "先に「欄を置く」で、印字する欄を用紙の上に置いてください。"); return; }
+    if (!make()) { m.innerHTML = box("ng", "上の入力に直すところがあります(赤い枠を見てください)。"); return; }
+    var data = G.docData(lastOut, settings, paper.kind), res = G.paperTexts(paper, data), h = [];
+    if (paper.kind === "invoice") {
+      var miss = X.invoiceMissing(paper.fields.map(function (f) { return f.key; }), data.rates);
+      if (miss.length) h.push(box("warn", "<b>請求書のお知らせ</b><br>" + esc(X.invoiceMissingText(miss).replace("このひな形", "この用紙の配置").replace("ひな形に書き足すか", "欄を足すか、用紙に印刷済みか確かめるか"))));
+      var chk = lastOut.invoice.check;
+      if (!chk.ok) h.push(box("ng", "<b>適格請求書の検査: 直すところがあります</b><ul>" + chk.errors.map(function (x) { return "<li>" + esc(x.message_ja) + "</li>"; }).join("") + "</ul>"));
+    }
+    res.warnings.forEach(function (w) { h.push(box("warn", esc(w))); });
+    m.innerHTML = h.join("");
+    drawStage();
+    printPaper(res.texts, res.paper);
+  });
+  $("paper-test").addEventListener("click", function () {
+    var sz = G.PAPERS[paper.paper], pts = [[20, 20], [sz.w - 20, 20], [20, sz.h - 20], [sz.w - 20, sz.h - 20], [sz.w / 2, sz.h / 2]], marks = "";
+    pts.forEach(function (p) {
+      var x = p[0] + paper.dx, y = p[1] + paper.dy;
+      marks += "<i style='left:" + (x - 5) + "mm;top:" + y + "mm;width:10mm;border-top-width:0.2mm'></i><i style='left:" + x + "mm;top:" + (y - 5) + "mm;height:10mm;border-left-width:0.2mm'></i>";
+    });
+    var texts = pts.map(function (p) { return {text: "左から" + p[0] + "mm・上から" + p[1] + "mm", x: p[0] + paper.dx + 2, y: p[1] + paper.dy + 2, size: 7, align: "left"}; });
+    texts[1].align = texts[3].align = "right"; texts[1].x -= 4; texts[3].x -= 4;
+    printPaper(texts, sz, marks);
+  });
+  if (window.addEventListener) window.addEventListener("resize", function () { drawStage(); });
+  $("paper-box").addEventListener("toggle", function () { drawStage(); });
+
+  loadSettings();
+  loadPaper();
+  loadTemplate();
 })();
 </script>
+<div id="paper-print" aria-hidden="true"></div>
 <script>
 // ホーム画面のアプリとして電波なしで開けるように、同じ場所の sw.js を登録する(https で置かれた時だけ。ファイルを直接開いた時は何もしない)
 if ("serviceWorker" in navigator && location.protocol === "https:") { navigator.serviceWorker.register("sw.js").catch(function () {}); }
