@@ -28,7 +28,8 @@ class TestGenba(unittest.TestCase):
             self.assertIn(href, ("manifest.webmanifest", "icon-192.png"), href)
         self.assertIn("connect-src 'none'", page)
         for url in re.findall(r"https?://[^\s\"'<)]+", page):
-            self.assertTrue(url.startswith("https://www.nta.go.jp/"), url)   # 出典の表示だけ
+            # 出典の表示と、Excel(.xlsx)の XML の名前空間の名前だけ(名前空間は読み込み先ではなく、通信しない)
+            self.assertTrue(url.startswith("https://www.nta.go.jp/") or url == "http://schemas.openxmlformats.org/", url)
 
     def test_no_speech_api(self):
         # 声はOSのキーボードの音声入力に任せる(ブラウザの音声認識は外のサーバーに送る場合がある)
@@ -41,6 +42,35 @@ class TestGenba(unittest.TestCase):
         self.assertIn("G.fromSpeech(", page)
         self.assertIn("このページは音声を扱いません", page)
         self.assertIn("外のサーバーで文字になります", page)
+
+
+class TestV060(unittest.TestCase):
+    """0.6.0: 自社の設定・自分の Excel のひな形・紙の用紙への印字。どれも端末の中だけ"""
+
+    def test_panels_and_parts(self):
+        page = build.build()
+        for i in ("settings-box", "xlsx-box", "paper-box", "set-export", "set-import", "set-logo", "set-seal", "set-accent", "set-cols",
+                  "tpl-file", "tpl-fill", "tpl-sample-dl", "paper-img", "paper-size", "paper-dx", "paper-dy", "paper-print"):
+            self.assertIn(f'id="{i}"', page, i)
+        self.assertIn("window.XlsxFill", page.replace("root.XlsxFill", "window.XlsxFill"))
+        self.assertIn('DecompressionStream("deflate-raw")', page)
+        self.assertIn("ひな形の見本.xlsx", page)
+        self.assertIn("@page{size:", page)            # 用紙の大きさを mm で決めて印刷
+        self.assertNotIn("/*XLSX*/", page)
+
+    def test_local_only(self):
+        page = build.build()
+        # 画像・ひな形・設定は FileReader で読み、Blob で保存する。外に送る道具は使わない
+        self.assertIn("FileReader", page)
+        self.assertNotRegex(page, r"\bfetch\(|XMLHttpRequest|WebSocket|sendBeacon|EventSource|navigator\.share")
+        self.assertIn("写真は画面で位置を合わせるためだけで、印刷されません", page)
+
+    def test_storage_is_guarded(self):
+        js = build.build()
+        # localStorage はすべて try の中(保存できない端末でも動く)
+        for m in re.finditer(r"localStorage\.(getItem|setItem|removeItem)", js):
+            before = js[max(0, m.start() - 160):m.start()]
+            self.assertIn("try", before, js[m.start() - 80:m.end()])
 
 
 class TestFirstTen(unittest.TestCase):
