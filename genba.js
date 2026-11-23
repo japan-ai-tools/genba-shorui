@@ -2,7 +2,7 @@
    通信しない・標準の部品だけ。請求書の検査は jp-invoice-check と同じ決まり(JPInvoice)を使う。MIT・nexus-tools */
 (function (root) {
   "use strict";
-  var VERSION = "0.5.0";
+  var VERSION = "0.6.0";
   var MAX_ITEMS = 300;              // 1つの書類の品目の上限(大きすぎる入力で固まらないため)
   var MAX_YEN = 100000000000;       // 1行の金額の上限 1,000億円(打ち間違いを止める)
   var J = root.JPInvoice || (typeof require === "function" ? require("./jpinvoice_core.js") : null);
@@ -224,7 +224,139 @@
     return {report: r, estimate: e, invoice: i};
   }
 
+  // ---- 0.6.0 自社の設定(屋号・住所・電話・登録番号・振込先・ロゴ・印影・下の一言・色・品目の表の列の順) ----
+  // 端末の中(ブラウザの保存領域)と、JSON のファイルに書き出して別の端末へ移す。どこにも送らない
+  var COLUMNS = ["品名", "数量", "単価", "金額", "税率"];      // 品目の表に出せる列
+  var COLUMNS_REQUIRED = ["品名", "金額", "税率"];             // 外せない列(請求書の取引の内容・税率)
+  var DEFAULT_ACCENT = "#1f5fa8";
+  var MAX_IMAGE = 1500000;                                       // 画像1つ(data URL)約1.5MB まで
+  var SETTINGS_LIMITS = {name: 100, regno: 20, address: 200, phone: 40, bank: 300, footer: 500};
+  function defaultSettings() {
+    return {name: "", regno: "", address: "", phone: "", bank: "", footer: "", logo: "", seal: "", accent: DEFAULT_ACCENT, columns: COLUMNS.slice()};
+  }
+  function cleanImage(v) {
+    v = String(v == null ? "" : v);
+    return v.length <= MAX_IMAGE && /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(v) ? v : "";
+  }
+  function normalizeSettings(raw) {
+    raw = raw && typeof raw === "object" ? raw : {};
+    var s = defaultSettings();
+    Object.keys(SETTINGS_LIMITS).forEach(function (k) {
+      if (raw[k] != null) s[k] = String(raw[k]).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "").trim().slice(0, SETTINGS_LIMITS[k]);
+    });
+    s.logo = cleanImage(raw.logo); s.seal = cleanImage(raw.seal);
+    if (/^#[0-9a-fA-F]{6}$/.test(String(raw.accent || ""))) s.accent = String(raw.accent).toLowerCase();
+    if (Array.isArray(raw.columns)) {
+      var cols = [];
+      raw.columns.forEach(function (c) { c = String(c); if (COLUMNS.indexOf(c) >= 0 && cols.indexOf(c) < 0) cols.push(c); });
+      COLUMNS_REQUIRED.forEach(function (c) { if (cols.indexOf(c) < 0) cols.push(c); });   // 外せない列は必ず残す
+      s.columns = cols;
+    }
+    return s;
+  }
+  // 先に出た軽い版(0.6.0 初版・保存名 genba-shorui:company:v1)の設定を引き継ぐ。名前と登録番号は持たないので空のまま
+  var OLD_COLORS = {blue: "#1f5fa8", green: "#2e7d4f", brown: "#8a4b2a", black: "#1d2430"};
+  function migrateCompany(old) {
+    old = old && typeof old === "object" ? old : {};
+    return normalizeSettings({address: old.address, phone: old.phone, bank: old.bank, footer: old.note,
+      logo: old.logo, seal: old.seal, accent: OLD_COLORS[old.color] || DEFAULT_ACCENT});
+  }
+  // 書き出し: {app, type, format, version, exported_at, settings, paper}
+  function exportSettings(settings, paper, now) {
+    return JSON.stringify({app: "genba-shorui", type: "settings", format: 1, version: VERSION, exported_at: (now || new Date()).toISOString(),
+      settings: normalizeSettings(settings), paper: paper ? normalizePaper(paper) : null}, null, 2);
+  }
+  function importSettings(text) {
+    var o;
+    if (String(text || "").length > 8000000) throw err("設定のファイルが大きすぎます。");
+    try { o = typeof text === "string" ? JSON.parse(text) : text; } catch (e) { throw err("設定のファイル(JSON)として読めませんでした。このアプリの「設定を書き出す」で作ったファイルを選んでください。"); }
+    if (!o || o.app !== "genba-shorui" || o.type !== "settings") throw err("このアプリの設定のファイルではありません(「設定を書き出す」で作ったファイルを選んでください)。");
+    if (o.format !== 1) throw err("新しい版で作った設定のファイルです。アプリを新しくしてから読み込んでください。");
+    var notes = [];
+    var raw = o.settings || {};
+    ["logo", "seal"].forEach(function (k) { if (raw[k] && !cleanImage(raw[k])) notes.push((k === "logo" ? "ロゴ" : "印影") + "の画像は読めない形か大きすぎるため、読み込みませんでした。"); });
+    return {settings: normalizeSettings(raw), paper: o.paper ? normalizePaper(o.paper) : null, notes: notes};
+  }
+
+  // ---- 0.6.0 書類の中身を差し込み用の値にする(Excel のひな形と紙の用紙で同じものを使う) ----
+  var KIND_TITLE = {report: "作業日報", estimate: "御見積書", invoice: "請求書"};
+  function honorific(n) { n = String(n || "").trim(); return !n ? "" : (/(様|御中|殿)$/.test(n) ? n : n + " 様"); }
+  function dateJa(d) { var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d || ""); return m ? m[1] + "年" + (+m[2]) + "月" + (+m[3]) + "日" : String(d || ""); }
+  function docData(out, settings, kind) {
+    var s = normalizeSettings(settings), r = out.report, e = out.estimate, iv = out.invoice, inv = iv.invoice, by = {};
+    kind = KIND_TITLE[kind] ? kind : "invoice";
+    e.totals.forEach(function (t) { by[t.rate] = t; });
+    var reduced = e.items.some(function (it) { return it.reduced; });
+    var fields = {
+      "書類名": KIND_TITLE[kind], "現場名": r.site, "日付": dateJa(kind === "report" ? r.date : inv.date), "天気": r.weather,
+      "お客様": honorific(inv.buyer.name), "自分の名前": inv.issuer.name, "登録番号": inv.issuer.registration_number,
+      "住所": s.address, "電話": s.phone, "振込先": kind === "invoice" ? s.bank : "", "備考": s.footer,
+      "合計": e.totals.reduce(function (a, t) { return a + t.amount; }, 0),
+      "10%対象": by[10] ? by[10].amount : 0, "消費税10%": by[10] ? by[10].tax : 0,
+      "8%対象": by[8] ? by[8].amount : 0, "消費税8%": by[8] ? by[8].tax : 0,
+      "請求金額": iv.grand_total, "軽減の注記": reduced ? "※は軽減税率(8%)の対象です。" : "",
+      "作業した人": r.workers.map(function (w) { return w.name + " " + qtyText(w.hours100) + "時間"; }).join("、"),
+      "作業の記録": r.notes.join("、"), "有効期限": kind === "estimate" ? "発行から" + e.valid_days + "日" : ""
+    };
+    var items = e.items.map(function (it, i) {
+      return {"No": i + 1, "品名": it.description + (it.reduced ? " ※" : ""), "数量": it.qty100 / 100, "単位": it.unit, "単価": it.unit_price,
+        "金額": it.amount, "税率": it.rate + "%" + (it.reduced ? "(軽減)" : ""), "区分": it.category || "その他"};
+    });
+    return {kind: kind, fields: fields, items: items, rates: e.totals.map(function (t) { return t.rate; })};
+  }
+
+  // ---- 0.6.0 紙の用紙に印字する時の配置(用紙の左上から mm)。端末の中と設定の JSON に残す ----
+  var PAPERS = {A4: {w: 210, h: 297, label: "A4(210×297mm)"}, B5: {w: 182, h: 257, label: "B5(182×257mm)"}};
+  var PAPER_ITEM_KEYS = ["No", "品名", "数量", "単位", "単価", "金額", "税率"];
+  function num(v, lo, hi, d) { v = Number(v); if (!isFinite(v)) return d; return Math.round(Math.min(hi, Math.max(lo, v)) * 10) / 10; }
+  function defaultPaper() { return {format: 1, paper: "A4", kind: "invoice", dx: 0, dy: 0, font: 10.5, pitch: 7, rows: 10, fields: []}; }
+  function normalizePaper(raw) {
+    if (typeof raw === "string") { try { raw = JSON.parse(raw); } catch (e) { raw = null; } }
+    raw = raw && typeof raw === "object" ? raw : {};
+    var p = defaultPaper();
+    if (PAPERS[raw.paper]) p.paper = raw.paper;
+    if (KIND_TITLE[raw.kind]) p.kind = raw.kind;
+    p.dx = num(raw.dx, -30, 30, 0); p.dy = num(raw.dy, -30, 30, 0);
+    p.font = num(raw.font, 6, 28, 10.5); p.pitch = num(raw.pitch, 3, 40, 7); p.rows = Math.round(num(raw.rows, 1, 60, 10));
+    var size = PAPERS[p.paper], keys = {};
+    FIELD_KEYS_ALL().forEach(function (k) { keys[k] = true; });
+    p.fields = (Array.isArray(raw.fields) ? raw.fields : []).filter(function (f) { return f && keys[f.key]; }).slice(0, 80).map(function (f) {
+      var o = {key: String(f.key), x: num(f.x, 0, size.w, 10), y: num(f.y, 0, size.h, 10)};
+      if (f.size != null) o.size = num(f.size, 6, 28, p.font);
+      return o;
+    });
+    return p;
+  }
+  function serializePaper(p) { return JSON.stringify(normalizePaper(p)); }
+  function FIELD_KEYS_ALL() {
+    return ["書類名", "現場名", "日付", "天気", "お客様", "自分の名前", "登録番号", "住所", "電話", "振込先", "備考", "合計", "10%対象", "消費税10%", "8%対象", "消費税8%", "請求金額", "軽減の注記", "作業した人", "作業の記録", "有効期限"].concat(PAPER_ITEM_KEYS);
+  }
+  function yenText(v) { return typeof v === "number" ? v.toLocaleString("ja-JP") : String(v == null ? "" : v); }
+  // 印字する文字と位置(mm・ずれの補正込み)。品目の列は「行の間隔」ずつ下へ、決めた行数まで
+  function paperTexts(layout, data) {
+    var p = normalizePaper(layout), out = [], warn = [], n = data.items.length;
+    p.fields.forEach(function (f) {
+      var size = f.size || p.font;
+      if (PAPER_ITEM_KEYS.indexOf(f.key) >= 0) {
+        data.items.slice(0, p.rows).forEach(function (it, i) {
+          var v = it[f.key];
+          if (v === "" || v == null) return;
+          out.push({key: f.key, text: f.key === "数量" ? qtyText(Math.round(v * 100)) : yenText(v), x: f.x + p.dx, y: f.y + p.pitch * i + p.dy, size: size, align: /^(数量|単価|金額)$/.test(f.key) ? "right" : "left"});
+        });
+      } else {
+        var v = data.fields[f.key];
+        if (v === "" || v == null) return;
+        if (/8%/.test(f.key) && v === 0 && (data.rates || []).indexOf(8) < 0) return;   // 軽減税率の品目がない時は 8% の欄に 0 を印字しない
+        out.push({key: f.key, text: yenText(v), x: f.x + p.dx, y: f.y + p.dy, size: size, align: /^(合計|10%対象|消費税10%|8%対象|消費税8%|請求金額)$/.test(f.key) ? "right" : "left"});
+      }
+    });
+    if (n > p.rows && p.fields.some(function (f) { return PAPER_ITEM_KEYS.indexOf(f.key) >= 0; })) warn.push("品目が " + n + " 件ありますが、用紙の品目の行は " + p.rows + " 行です。" + (n - p.rows) + " 件は印字されません(行数を増やすか、別の紙にしてください)。");
+    return {paper: PAPERS[p.paper], texts: out, warnings: warn};
+  }
+
   var api = {VERSION: VERSION, MAX_ITEMS: MAX_ITEMS, parseLine: parseLine, parseMemo: parseMemo, parseQty: parseQty, parseYen: parseYen, qtyText: qtyText,
-    lineAmount: lineAmount, CATEGORIES: CATEGORIES, breakdown: breakdown, breakdownNotices: breakdownNotices, makeReport: makeReport, makeEstimate: makeEstimate, makeInvoice: makeInvoice, totalsByRate: totalsByRate, fromMemo: fromMemo, fromSpeech: fromSpeech, kanjiToInt: kanjiToInt};
+    lineAmount: lineAmount, CATEGORIES: CATEGORIES, breakdown: breakdown, breakdownNotices: breakdownNotices, makeReport: makeReport, makeEstimate: makeEstimate, makeInvoice: makeInvoice, totalsByRate: totalsByRate, fromMemo: fromMemo, fromSpeech: fromSpeech, kanjiToInt: kanjiToInt,
+    COLUMNS: COLUMNS, COLUMNS_REQUIRED: COLUMNS_REQUIRED, defaultSettings: defaultSettings, normalizeSettings: normalizeSettings, migrateCompany: migrateCompany, exportSettings: exportSettings, importSettings: importSettings,
+    KIND_TITLE: KIND_TITLE, docData: docData, dateJa: dateJa, PAPERS: PAPERS, PAPER_ITEM_KEYS: PAPER_ITEM_KEYS, PAPER_FIELD_KEYS: FIELD_KEYS_ALL(), defaultPaper: defaultPaper, normalizePaper: normalizePaper, serializePaper: serializePaper, paperTexts: paperTexts};
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.Genba = api;
 })(this);
