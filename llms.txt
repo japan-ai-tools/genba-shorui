@@ -11,13 +11,17 @@
 - Lines whose quantity and unit price cannot be read stay in the daily report only; prices are never invented
 - Optional cost tags `[材料]` `[労務]` `[法定福利]` `[安全]` `[建退共]` (unit `人工` = labour) add a materials/labour/welfare breakdown to the estimate, as Japan's amended Construction Business Act (in force 2025-12-12) asks contractors to try to show. Missing labour or welfare lines give a non-blocking notice; price adequacy is not judged
 - Lines in `人工` (worker-days) list the per-day rate with a note: Japan's public-works design labour rates (公共工事設計労務単価, MLIT, from 2026-03, per 8 hours) exclude employer costs such as social insurance; a separate bracketed reference value includes them. Compare like with like. No rate is judged
+- Company settings (0.6.0): address, phone, registration number, bank details, logo and seal (印影) images, footer note, accent colour and item-column order are stored in this browser only and inserted into all three documents. Export/import as a JSON file `{app:"genba-shorui", type:"settings", format:1, version, exported_at, settings, paper}`
+- Own Excel template (0.6.0): load a .xlsx containing placeholders `{{現場名}} {{日付}} {{天気}} {{お客様}} {{自分の名前}} {{登録番号}} {{合計}} {{10%対象}} {{消費税10%}} {{8%対象}} {{消費税8%}} {{請求金額}}` and an item row with `{{品名}} {{数量}} {{単位}} {{単価}} {{金額}} {{税率}}`; a new .xlsx is written on the device with formatting, merged cells and widths kept, the item row repeated downward and rows below shifted (formulas, merges, print area, conditional formats). Amounts are written as numbers. When the document is an invoice, missing placeholders for the six required items are listed (non-blocking). A sample template ひな形の見本.xlsx is generated in the page. ZIP/XML handling is in `xlsx_fill.js` (no libraries; DecompressionStream / CompressionStream)
+- Paper form (0.6.0): place field labels over a photo of a pre-printed A4/B5 form, set an offset calibration in mm, and print only the text at those positions (the photo is never printed or stored)
 
 ## Limits
-- Saves drafts only in this browser; photos are not stored; no multi-device or team use yet
+- Saves drafts and settings only in this browser; photos are not stored; settings move between devices only by the exported JSON file
+- Excel: .xls, .xlsm, password-protected files and files over 20MB are not supported; sheets with Excel tables, pivot tables, charts or comments are filled in place without adding rows (with a notice)
 - Does not suggest market unit prices; does not read text or quantities from photos
 - Does not confirm that a registration number is currently valid (see [invoice-watch](https://github.com/japan-ai-tools/invoice-watch))
 
 ## Optional
-- [Tests](tests/): `node tests/test_genba.mjs` and `python -m unittest discover -s tests`
+- [Tests](tests/): `node tests/test_genba.mjs` (includes an .xlsx round trip) and `python -m unittest discover -s tests`
 - Invoice rules shared with [jp-invoice-check](https://github.com/japan-ai-tools/jp-invoice-check)
 - [License](LICENSE): MIT. Sources: [LICENSES.md](LICENSES.md)
