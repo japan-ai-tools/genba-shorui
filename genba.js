@@ -2,7 +2,7 @@
    通信しない・標準の部品だけ。請求書の検査は jp-invoice-check と同じ決まり(JPInvoice)を使う。MIT・nexus-tools */
 (function (root) {
   "use strict";
-  var VERSION = "0.6.0";
+  var VERSION = "0.6.1";
   var MAX_ITEMS = 300;              // 1つの書類の品目の上限(大きすぎる入力で固まらないため)
   var MAX_YEN = 100000000000;       // 1行の金額の上限 1,000億円(打ち間違いを止める)
   var J = root.JPInvoice || (typeof require === "function" ? require("./jpinvoice_core.js") : null);
@@ -128,6 +128,11 @@
     if (days.length) {
       var shown = days.slice(0, 5).map(function (it) { return it.description + " " + it.unit_price.toLocaleString("ja-JP") + "円"; }).join("、") + (days.length > 5 ? " ほか" + (days.length - 5) + "行" : "");
       out.push({code: "I_LABOR_DAY_RATE", message_ja: "1人工あたりの単価: " + shown + "。公共工事設計労務単価(国土交通省・令和8年3月から適用・8時間あたり)は、事業主が負担する必要経費(法定福利費の事業主負担分・安全管理費など)を含まない値で、それを加えた参考値は括弧書きで別に示されています。単価を比べるときは、どちらの値と比べているかを確かめてください(このアプリは金額の妥当さを判断しません)。"});
+    }
+    // 0.6.1: 労務費と法定福利費まで分けている人にだけ、公共工事で求められる5項目の残りを知らせる(止めない・発注者ごとの決まりは判断しない)
+    if (has["労務費"] && has["法定福利費"]) {
+      var five = ["労務費", "材料費", "法定福利費", "安全衛生経費", "建退共掛金"], miss = five.filter(function (k) { return !has[k]; });
+      if (miss.length) out.push({code: "I_PUBLIC_FIVE_ITEMS", message_ja: "公共工事の見積内訳書では、労務費・材料費・法定福利費・安全衛生経費・建退共掛金の5項目をすべて書くよう求める発注者があります(例: 福島県は令和8年6月1日以降に入札公告する県の工事で、書いていない内訳書は原則無効。出せない項目は「計上不可」などと書く)。この見積に無い項目: " + miss.join("・") + "。民間の工事で書くかは使う人が決めます(このアプリは発注者ごとの決まりは判断しません)。"});
     }
     return out;
   }
