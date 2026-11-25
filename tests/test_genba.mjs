@@ -85,7 +85,7 @@ t("見積の内訳: 区分ごとの合計とお知らせ", () => {
   const out = G.fromMemo({ site: "s", date: "2026-11-16", memo }, ISSUER, { buyer: "b" });
   assert.deepEqual(out.estimate.breakdown, [{ category: "材料費", amount: 7500 }, { category: "労務費", amount: 25000 }, { category: "法定福利費", amount: 3800 }, { category: "その他", amount: 30000 }]);
   assert.equal(out.estimate.breakdown.reduce((s, b) => s + b.amount, 0), out.estimate.totals.reduce((s, t) => s + t.amount, 0));
-  assert.deepEqual(out.estimate.notices.map((x) => x.code), ["I_LABOR_DAY_RATE"]);   // 人工の行があるときは単価の比べ方だけ知らせる
+  assert.deepEqual(out.estimate.notices.map((x) => x.code), ["I_LABOR_DAY_RATE", "I_PUBLIC_FIVE_ITEMS"]);   // 人工の行の単価の比べ方と、5項目の残り
   assert.equal(out.invoice.check.ok, true);
   const noLabor = G.fromMemo({ site: "s", date: "2026-11-16", memo: "クロス 1㎡ @600" }, ISSUER, { buyer: "b" });
   assert.deepEqual(noLabor.estimate.notices.map((x) => x.code), ["I_LABOR_NOT_SHOWN"]);
@@ -100,10 +100,21 @@ t("1人工あたりの単価: 設計労務単価と比べるときの注意(判�
   assert.ok(m.message_ja.includes("必要経費"));
   assert.ok(!/安い|高い|下回|違反/.test(m.message_ja));                         // 金額の妥当さは言わない
   const noDay = G.fromMemo({ site: "s", date: "2026-11-17", memo: "[労務] 片付け 1式 @9000\n[法定福利] 法定福利 1式 @1000" }, ISSUER, { buyer: "b" });
-  assert.equal(noDay.estimate.notices.length, 0);                                 // 人工の行がなければ出さない
+  assert.deepEqual(noDay.estimate.notices.map((x) => x.code), ["I_PUBLIC_FIVE_ITEMS"]);   // 人工の行がなければ単価の注意は出さない
   const many = Array.from({ length: 8 }, (_, i) => `職人${i} 1人工 @2000${i}`).join("\n");
   const big = G.fromMemo({ site: "s", date: "2026-11-17", memo: many + "\n[法定福利] 法定福利 1式 @1000" }, ISSUER, { buyer: "b" });
   assert.ok(big.estimate.notices[0].message_ja.includes("ほか3行"));             // 長くしすぎない
+});
+t("0.6.1 公共工事の見積内訳書の5項目: 労務費と法定福利費を分けた人にだけ、残りを知らせる(止めない)", () => {
+  const part = G.fromMemo({ site: "s", date: "2026-11-25", memo: "[材料] クロス 1㎡ @600\n[労務] 片付け 1式 @9000\n[法定福利] 法定福利 1式 @1000" }, ISSUER, { buyer: "b" });
+  const m = part.estimate.notices.find((x) => x.code === "I_PUBLIC_FIVE_ITEMS");
+  assert.ok(m.message_ja.includes("無い項目: 安全衛生経費・建退共掛金"), m.message_ja);
+  assert.ok(m.message_ja.includes("福島県") && m.message_ja.includes("計上不可"));
+  assert.ok(!/違反|安い|高い/.test(m.message_ja));                                // 判断はしない
+  const all = G.fromMemo({ site: "s", date: "2026-11-25", memo: "[材料] クロス 1㎡ @600\n[労務] 片付け 1式 @9000\n[法定福利] 法定福利 1式 @1000\n[安全] 安全帯 1式 @2000\n[建退共] 掛金 1式 @500" }, ISSUER, { buyer: "b" });
+  assert.equal(all.estimate.notices.length, 0);                                   // 5項目そろえば出さない
+  const plain = G.fromMemo({ site: "s", date: "2026-11-25", memo: "クロス 1㎡ @600" }, ISSUER, { buyer: "b" });
+  assert.ok(!plain.estimate.notices.some((x) => x.code === "I_PUBLIC_FIVE_ITEMS"));   // 内訳を使わない人には出さない
 });
 t("0.4.0 画面: はじめて開くと見本が入り、1回押すと3つの書類ができる(簡単な偽の画面で動かす)", () => {
   const fs = require("node:fs"), path = require("node:path"), vm = require("node:vm");
